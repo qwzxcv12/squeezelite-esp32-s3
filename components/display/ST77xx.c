@@ -206,7 +206,7 @@ static void SetLayout( struct GDS_Device* Device, struct GDS_Layout *Layout ) {
 	Private->MADCtl = Layout->VFlip ? (Private->MADCtl | (1 << 6)) : (Private->MADCtl & ~(1 << 6));
 	Private->MADCtl = Layout->Rotate ? (Private->MADCtl | (1 << 5)) : (Private->MADCtl & ~(1 << 5));
 	if (Private->Model == ST7735) {
-		Private->MADCtl = Layout->ColorSwap ? (Private->MADCtl | (1 << 3)) : (Private->MADCtl & ~(1 << 3));
+		Private->MADCtl &= ~(1 << 3);
 	} else {
 		Private->MADCtl = Layout->ColorSwap ? (Private->MADCtl & ~(1 << 3)) : (Private->MADCtl | (1 << 3));
 	}

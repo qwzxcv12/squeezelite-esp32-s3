@@ -576,7 +576,7 @@ static void output_thread_i2s(void *arg) {
 			usleep(100000);
 			continue;
 		} else if (output.state == OUTPUT_STOPPED) {
-			extern volatile uint8_t g_audio_peak_level; g_audio_peak_level = 0; synced = false; if (isI2SStarted && (pdTICKS_TO_MS(xTaskGetTickCount()) - i2s_idle_since > 10000)) { UNLOCK; isI2SStarted = false; i2s_zero_dma_buffer(CONFIG_I2S_NUM); i2s_stop(CONFIG_I2S_NUM); adac->power(ADAC_STANDBY); usleep(100000); continue; }
+			extern volatile uint8_t g_audio_peak_level; g_audio_peak_level = 0; synced = false;
 		}
 					
 		oframes = 0;

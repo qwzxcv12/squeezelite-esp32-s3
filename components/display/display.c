@@ -244,7 +244,7 @@ void display_init(char *welcome) {
 	
 	if (init) {
 		static DRAM_ATTR StaticTask_t xTaskBuffer __attribute__ ((aligned (4)));
-		static EXT_RAM_ATTR StackType_t xStack[DISPLAYER_STACK_SIZE] __attribute__ ((aligned (4)));
+		static DRAM_ATTR StackType_t xStack[DISPLAYER_STACK_SIZE] __attribute__ ((aligned (4)));
 		struct GDS_Layout Layout = {
 			.HFlip = strcasestr(config, "HFlip"), 
 			.VFlip = strcasestr(config, "VFlip"), 
@@ -313,7 +313,6 @@ static void displayer_task(void *args) {
 		bool artwork_initialized = false;
 		TickType_t last_active_tick = xTaskGetTickCount();
 		int pwr_state = 0; /* 0 = Active (100% BL, 20FPS), 1 = Eco Dim (25% BL, 2FPS), 2 = Standby (Screen Off) */
-		bool wifi_eco_enabled = false;
 
 		GDS_SetTextWidth(display, GDS_GetWidth(display));
 		GDS_ClearWindow(display, 0, 0, 159, 127, HIFI_BG);
@@ -331,11 +330,6 @@ static void displayer_task(void *args) {
 
 			if (is_active || g_audio_peak_level > 2) {
 				last_active_tick = now_tick;
-				if (wifi_eco_enabled) {
-					esp_wifi_set_ps(WIFI_PS_NONE);
-					wifi_eco_enabled = false;
-					ESP_LOGI(TAG, "Power Manager: Wi-Fi High Performance Mode (WIFI_PS_NONE)");
-				}
 				if (pwr_state != 0) {
 					if (pwr_state == 2) {
 						GDS_DisplayOn(display);
@@ -346,12 +340,7 @@ static void displayer_task(void *args) {
 				}
 			} else {
 				uint32_t idle_sec = (now_tick - last_active_tick) * portTICK_PERIOD_MS / 1000;
-				if (idle_sec >= 60 && !wifi_eco_enabled) {
-					esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
-					wifi_eco_enabled = true;
-					ESP_LOGI(TAG, "Power Manager: Wi-Fi Modem Sleep Enabled (WIFI_PS_MIN_MODEM)");
-				}
-				if (idle_sec >= 180) {
+				if (idle_sec >= 120) {
 					if (pwr_state != 2) {
 						GDS_SetContrast(display, 0);
 						GDS_DisplayOff(display);
