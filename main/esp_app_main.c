@@ -103,7 +103,7 @@ const DefaultStringVal defaultStringVals[] = {
     {"jack_mutes_amp", "n"},
     {"gpio_exp_config", CONFIG_GPIO_EXP_CONFIG},
     {"bat_config", ""},
-    {"metadata_config", ""},
+    {"metadata_config", "format=%artist% - %title%,artwork"},
     {"telnet_enable", ""},
     {"telnet_buffer", "40000"},
     {"telnet_block", "500"},
@@ -311,6 +311,23 @@ void register_default_nvs(){
         register_single_default_num_val(&defaultNumVals[i]);
     }
 
+	{
+		char *spi_cfg = (char *)config_alloc_get(NVS_TYPE_STR, "spi_config");
+		if (!spi_cfg || !strstr(spi_cfg, "dc=10")) {
+			config_set_value(NVS_TYPE_STR, "spi_config", "data=8,clk=7,dc=10");
+		}
+		FREE_AND_NULL(spi_cfg);
+		char *disp_cfg = (char *)config_alloc_get(NVS_TYPE_STR, "display_config");
+		if (!disp_cfg || !strstr(disp_cfg, "ST7735") || !strstr(disp_cfg, "cswap")) {
+			config_set_value(NVS_TYPE_STR, "display_config", "SPI,width=160,height=128,cs=11,back=12,reset=9,speed=27000000,driver=ST7735,rotate,HFlip,cswap");
+		}
+		FREE_AND_NULL(disp_cfg);
+		char *meta_cfg = (char *)config_alloc_get(NVS_TYPE_STR, "metadata_config");
+		if (!meta_cfg || !strstr(meta_cfg, "artwork")) {
+			config_set_value(NVS_TYPE_STR, "metadata_config", "format=%artist% - %title%,artwork");
+		}
+		FREE_AND_NULL(meta_cfg);
+	}
 	wait_for_commit();
 	ESP_LOGD(TAG,"Done setting default values in nvs.");
 }

@@ -255,6 +255,13 @@ static bool Init( struct GDS_Device* Device ) {
 		Device->WriteCommand( Device, 0xB1 );
 		uint8_t frm[] = { 0x01, 0x2C, 0x2D };
 		Device->WriteData( Device, frm, sizeof(frm) );
+		Device->WriteCommand( Device, 0xB2 );
+		Device->WriteData( Device, frm, sizeof(frm) );
+		Device->WriteCommand( Device, 0xB3 );
+		uint8_t frm3[] = { 0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D };
+		Device->WriteData( Device, frm3, sizeof(frm3) );
+		Device->WriteCommand( Device, 0xB4 );
+		WriteByte( Device, 0x07 );
 
 		// PWCTR1..5 & VMCTR1 (Power control)
 		Device->WriteCommand( Device, 0xC0 );
@@ -281,6 +288,12 @@ static bool Init( struct GDS_Device* Device ) {
 
 		// Inversion off & Normal mode on
 		Device->WriteCommand( Device, 0x20 );
+		Device->WriteCommand( Device, 0xE0 );
+		uint8_t gm_p[] = {0x02,0x1c,0x07,0x12,0x37,0x32,0x29,0x2d,0x29,0x25,0x2B,0x39,0x00,0x01,0x03,0x10};
+		Device->WriteData( Device, gm_p, sizeof(gm_p) );
+		Device->WriteCommand( Device, 0xE1 );
+		uint8_t gm_n[] = {0x03,0x1d,0x07,0x06,0x2e,0x2c,0x29,0x2d,0x2e,0x2e,0x37,0x3f,0x00,0x00,0x02,0x10};
+		Device->WriteData( Device, gm_n, sizeof(gm_n) );
 		Device->WriteCommand( Device, 0x13 );
 		vTaskDelay(pdMS_TO_TICKS(10));
 	}
@@ -291,7 +304,7 @@ static bool Init( struct GDS_Device* Device ) {
 	WriteByte( Device, Private->MADCtl );		
 	
 	// set flip modes & contrast
-	GDS_SetContrast( Device, 0x7f );
+	GDS_SetContrast( Device, 0xff );
 	struct GDS_Layout Layout = { };
 	Device->SetLayout( Device, &Layout );
 	
@@ -302,6 +315,7 @@ static bool Init( struct GDS_Device* Device ) {
 	
 	// gone with the wind
 	Device->DisplayOn( Device );
+	vTaskDelay(pdMS_TO_TICKS(100));
 	Device->Update( Device );
 
 	return true;

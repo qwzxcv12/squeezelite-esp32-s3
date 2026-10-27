@@ -166,8 +166,8 @@ void display_init(char *welcome) {
 		displayer.task = xTaskCreateStatic( (TaskFunction_t) displayer_task, "common_displayer", DISPLAYER_STACK_SIZE, NULL, ESP_TASK_PRIO_MIN + 1, xStack, &xTaskBuffer);
 		
 		// set lines for "fixed" text mode
-		GDS_TextSetFontAuto(display, 1, GDS_FONT_LINE_1, -3);
-		GDS_TextSetFontAuto(display, 2, GDS_FONT_LINE_2, -3);
+		GDS_TextSetFontAuto(display, 1, GDS_FONT_LINE_1, height >= 64 ? 2 : -3);
+		GDS_TextSetFontAuto(display, 2, GDS_FONT_LINE_2, height >= 64 ? 2 : -3);
 		
 		displayer.metadata_config = config_alloc_get(NVS_TYPE_STR, "metadata_config");
 		
@@ -212,6 +212,7 @@ static void displayer_task(void *args) {
 		} else if (displayer.refresh) {
 			// little trick when switching master while in IDLE and missing it
 			GDS_TextLine(display, 1, GDS_TEXT_LEFT, GDS_TEXT_CLEAR | GDS_TEXT_UPDATE, displayer.header);	
+			scroll_sleep = 0;
 			displayer.refresh = false;			
 		}
 		
@@ -291,11 +292,12 @@ void displayer_artwork(uint8_t *data) {
 	if (!displayer.artwork.active) return;
 	
 	int x = displayer.artwork.offset ? displayer.artwork.offset + ARTWORK_BORDER : 0;
-	int y = x ? 0 : 32;
+	int y = x ? 0 : (GDS_GetHeight(display) >= 128 ? 44 : 32);
 	GDS_ClearWindow(display, x, y, -1, -1, GDS_COLOR_BLACK);
 	if (data) {
 		displayer.artwork.updated = true;
 		GDS_DrawJPEG(display, data, x, y, GDS_IMAGE_CENTER | (displayer.artwork.fit ? GDS_IMAGE_FIT : 0));
+		GDS_Update(display);
 	} else {
 		displayer.artwork.updated = false;
 		displayer.artwork.tick = xTaskGetTickCount();
@@ -379,6 +381,7 @@ void displayer_metadata(char *artist, char *album, char *title) {
 	utf8_decode(displayer.string);
 	ESP_LOGI(TAG, "playing %s", displayer.string);
 	displayer.boundary = GDS_TextStretch(display, 2, displayer.string, SCROLLABLE_SIZE);
+	displayer.refresh = true;
 		
 	xSemaphoreGive(displayer.mutex);
 }	
@@ -398,6 +401,7 @@ void displayer_scroll(char *string, int speed, int pause) {
 	strncpy(displayer.string, string, SCROLLABLE_SIZE);
 	displayer.string[SCROLLABLE_SIZE] = '\0';
 	displayer.boundary = GDS_TextStretch(display, 2, displayer.string, SCROLLABLE_SIZE);
+	displayer.refresh = true;
 		
 	xSemaphoreGive(displayer.mutex);
 }

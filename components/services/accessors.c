@@ -383,7 +383,7 @@ esp_err_t config_display_set(const display_config_t * config){
 			snprintf(config_buffer2,buffer_size,"%s,mode=%i",config_buffer,config->mode);
 			strcpy(config_buffer,config_buffer2);
 		}
-		snprintf(config_buffer2,buffer_size,"%s,driver=%s%s%s%s",config_buffer,config->drivername,config->hflip?",HFlip":"",config->vflip?",VFlip":"",config->rotate?",rotate":"");
+		snprintf(config_buffer2,buffer_size,"%s,driver=%s%s%s%s%s",config_buffer,config->drivername,config->hflip?",HFlip":"",config->vflip?",VFlip":"",config->rotate?",rotate":"",(!strcasecmp(config->drivername,"ST7735")||config->colorswap)?",cswap":"");
 		strcpy(config_buffer,config_buffer2);
 		log_send_messaging(MESSAGING_INFO,"Updating display configuration to %s",config_buffer);
 		err = config_set_value(NVS_TYPE_STR, "display_config", config_buffer);
@@ -689,7 +689,8 @@ const spi_bus_config_t * config_spi_get(spi_host_device_t * spi_host) {
         .sclk_io_num = -1,
         .miso_io_num = -1,
         .quadwp_io_num = -1,
-        .quadhd_io_num = -1
+        .quadhd_io_num = -1,
+        .max_transfer_sz = 8192
     };
 		
 	nvs_item = config_alloc_get_str("spi_config", CONFIG_SPI_CONFIG, NULL);
