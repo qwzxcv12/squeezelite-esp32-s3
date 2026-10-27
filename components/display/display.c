@@ -318,7 +318,7 @@ static void displayer_task(void *args) {
 
 		while (1) {
 			char header_buf[HEADER_SIZE + 1];
-			char track_buf[SCROLLABLE_SIZE + 32];
+			char track_buf[SCROLLABLE_SIZE + 64];
 			char time_buf[24] = "";
 			bool is_active = (displayer.state == DISPLAYER_ACTIVE);
 			bool is_playing = (displayer.timer && is_active);
