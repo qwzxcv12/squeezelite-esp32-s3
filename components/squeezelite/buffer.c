@@ -160,7 +160,12 @@ void _buf_unwrap(struct buffer *buf, size_t cont) {
 }
 
 void buf_init(struct buffer *buf, size_t size) {
-	buf->buf    = malloc(size);
+	buf->buf = malloc(size);
+	while (!buf->buf && size > 64 * 1024) {
+		size = (size * 3) / 4;
+		size = size - (size % 16);
+		buf->buf = malloc(size);
+	}
 	buf->readp  = buf->buf;
 	buf->writep = buf->buf;
 	buf->wrap   = buf->buf + size;
