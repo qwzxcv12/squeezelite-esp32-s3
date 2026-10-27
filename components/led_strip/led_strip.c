@@ -290,7 +290,7 @@ bool led_strip_init(struct led_strip_t *led_strip)
 {
     static EXT_RAM_ATTR TaskHandle_t task_created;
     StaticTask_t* xTaskBuffer = (StaticTask_t*) heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    static EXT_RAM_ATTR StackType_t xStack[LED_STRIP_TASK_SIZE] __attribute__ ((aligned (4)));
+    static DRAM_ATTR StackType_t xStack[LED_STRIP_TASK_SIZE] __attribute__ ((aligned (4)));
 
     if ((led_strip == NULL) ||
         (led_strip->led_strip_working == NULL) ||

@@ -54,6 +54,9 @@ static const char *TAG = "display";
 volatile uint8_t g_audio_peak_level = 0;
 static bool g_has_custom_artwork = false;
 
+extern struct led_strip_t* led_display;
+extern void led_vu_color_all(uint8_t r, uint8_t g, uint8_t b);
+
 extern const uint8_t default_artwork[]   asm("_binary_note_jpg_start");
 extern bool is_recovery_running;
 
@@ -346,6 +349,7 @@ static void displayer_task(void *args) {
 						GDS_SetContrast(display, 0);
 						GDS_DisplayOff(display);
 						pwr_state = 2;
+						if (led_display) led_vu_color_all(0, 0, 0);
 						ESP_LOGI(TAG, "Power Manager: Display Standby Off (0%% Backlight, ST7735 Sleep)");
 					}
 					vTaskDelay(pdMS_TO_TICKS(300));
@@ -602,6 +606,37 @@ static void displayer_task(void *args) {
 			GDS_DrawHLine(display, knob_x - 2, 118, 5, HIFI_WHITE);
 			GDS_DrawHLine(display, knob_x - 2, 119, 5, HIFI_WHITE);
 			GDS_DrawHLine(display, knob_x - 1, 120, 3, HIFI_CYAN);
+
+			/* =========================================================================
+			 * ZONE 5: ONBOARD WS2812 RGB LED (GPIO 21) DANCING TO LIVE AIRPLAY AUDIO
+			 * ========================================================================= */
+			if (led_display) {
+				if (pwr_state == 2) {
+					led_vu_color_all(0, 0, 0);
+				} else if (is_active && is_playing && peak > 2) {
+					/* Dynamic beat pulse: Coral Red on heavy bass, Emerald on mids, Violet on highs */
+					uint8_t bri = (peak > 80) ? 75 : (uint8_t)((peak * 60) / 80 + 15);
+					if (peak > 55) {
+						led_vu_color_all(bri, 0, bri / 4);
+					} else if (peak > 25) {
+						led_vu_color_all(0, bri, bri / 3);
+					} else {
+						led_vu_color_all(bri / 3, 0, bri);
+					}
+				} else if (is_active) {
+					/* Connected / Paused: Gentle breathing cyan */
+					int wave = (anim_tick % 40);
+					if (wave > 20) wave = 40 - wave;
+					uint8_t b = 4 + wave / 2;
+					led_vu_color_all(0, b / 2, b);
+				} else {
+					/* Ready / Standby: Warm subtle amber pulse */
+					int wave = (anim_tick % 60);
+					if (wave > 30) wave = 60 - wave;
+					uint8_t b = 3 + wave / 3;
+					led_vu_color_all(b, b / 2, 0);
+				}
+			}
 
 			GDS_Update(display);
 			anim_tick++;

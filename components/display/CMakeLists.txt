@@ -4,7 +4,7 @@ set(TJPGD tjpgd)
 idf_component_register(SRC_DIRS . core core/ifaces  fonts
 						INCLUDE_DIRS . fonts core
 						REQUIRES platform_config tools esp_common
-						PRIV_REQUIRES services freertos driver esp_wifi ${TJPGD}
+						PRIV_REQUIRES services freertos driver esp_wifi ${TJPGD} led_strip
 						EMBED_FILES note.jpg )		
 
 if (NOT TJPGD)
