@@ -52,6 +52,7 @@ static const char *TAG = "display";
 volatile uint8_t g_audio_peak_level = 0;
 
 extern const uint8_t default_artwork[]   asm("_binary_note_jpg_start");
+extern bool is_recovery_running;
 
 static EXT_RAM_ATTR struct {
 	TaskHandle_t task;
@@ -243,6 +244,10 @@ static void display_sleep(void) {
  * Professional Hi-Fi Audio Streamer UI & Continuous Smooth Marquee Task
  */
 static void displayer_task(void *args) {
+	vTaskDelay(pdMS_TO_TICKS(400));
+	if (is_recovery_running) {
+		vTaskSuspend(NULL);
+	}
 	/* Dedicated 20 FPS Hi-Fi Dashboard for 16-bit color 160x128 ST7735 screens */
 	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) >= 160 && GDS_GetHeight(display) >= 128) {
 		int marquee_x = 0;
@@ -311,6 +316,16 @@ static void displayer_task(void *args) {
 			}
 
 			xSemaphoreGive(displayer.mutex);
+
+			/* Clear all non-album background margins so no stray boot pixels remain */
+			GDS_DrawHLine(display, 0, 17, 160, HIFI_BG);
+			GDS_ClearWindow(display, 0, 46, 159, 47, HIFI_BG);
+			GDS_ClearWindow(display, 0, 48, 1, 113, HIFI_BG);
+			GDS_ClearWindow(display, 92, 48, 93, 113, HIFI_BG);
+			GDS_ClearWindow(display, 158, 48, 159, 113, HIFI_BG);
+			GDS_ClearWindow(display, 0, 114, 159, 115, HIFI_BG);
+			GDS_ClearWindow(display, 0, 126, 159, 127, HIFI_BG);
+			GDS_DrawBox(display, 94, 48, 157, 113, HIFI_INDIGO, false);
 
 			/* =========================================================================
 			 * ZONE 1: TOP HEADER BAR (Y: 0..16)
