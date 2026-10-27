@@ -12,6 +12,8 @@
 #include <stdbool.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "gds.h"
 #include "gds_private.h"
@@ -242,9 +244,46 @@ static bool Init( struct GDS_Device* Device ) {
 #endif
 
 	ESP_LOGI(TAG, "ST77xx with bit depth %u, offsets %hu:%hu, page %u, iRAM %p", Device->Depth, Private->Offset.Height, Private->Offset.Width, Private->PageSize, Private->iRAM);
-	
-	// Sleepout + Booster
+	// Reset + Sleepout + Booster with proper timing
+	Device->WriteCommand( Device, 0x01 );
+	vTaskDelay(pdMS_TO_TICKS(120));
 	Device->WriteCommand( Device, 0x11 );
+	vTaskDelay(pdMS_TO_TICKS(150));
+
+	if (Private->Model == ST7735) {
+		// FRMCTR1 (Frame rate control)
+		Device->WriteCommand( Device, 0xB1 );
+		uint8_t frm[] = { 0x01, 0x2C, 0x2D };
+		Device->WriteData( Device, frm, sizeof(frm) );
+
+		// PWCTR1..5 & VMCTR1 (Power control)
+		Device->WriteCommand( Device, 0xC0 );
+		uint8_t pw1[] = { 0xA2, 0x02, 0x84 };
+		Device->WriteData( Device, pw1, sizeof(pw1) );
+
+		Device->WriteCommand( Device, 0xC1 );
+		WriteByte( Device, 0xC5 );
+
+		Device->WriteCommand( Device, 0xC2 );
+		uint8_t pw3[] = { 0x0A, 0x00 };
+		Device->WriteData( Device, pw3, sizeof(pw3) );
+
+		Device->WriteCommand( Device, 0xC3 );
+		uint8_t pw4[] = { 0x8A, 0x2A };
+		Device->WriteData( Device, pw4, sizeof(pw4) );
+
+		Device->WriteCommand( Device, 0xC4 );
+		uint8_t pw5[] = { 0x8A, 0xEE };
+		Device->WriteData( Device, pw5, sizeof(pw5) );
+
+		Device->WriteCommand( Device, 0xC5 );
+		WriteByte( Device, 0x0E );
+
+		// Inversion off & Normal mode on
+		Device->WriteCommand( Device, 0x20 );
+		Device->WriteCommand( Device, 0x13 );
+		vTaskDelay(pdMS_TO_TICKS(10));
+	}
 	
 	// need BGR & Address Mode
 	Private->MADCtl = 1 << 3;

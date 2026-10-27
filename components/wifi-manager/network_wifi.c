@@ -918,7 +918,11 @@ esp_netif_t* network_wifi_config_ap() {
     }
     FREE_AND_NULL(value);
 
-    ap_config.ap.authmode = AP_AUTHMODE;
+    if (strlen((char*)ap_config.ap.password) == 0) {
+        ap_config.ap.authmode = WIFI_AUTH_OPEN;
+    } else {
+        ap_config.ap.authmode = AP_AUTHMODE;
+    }
     ap_config.ap.ssid_hidden = DEFAULT_AP_SSID_HIDDEN;
     ap_config.ap.max_connection = DEFAULT_AP_MAX_CONNECTIONS;
     ap_config.ap.beacon_interval = DEFAULT_AP_BEACON_INTERVAL;
