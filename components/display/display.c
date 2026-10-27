@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include "esp_log.h"
+#include "esp_wifi.h"
 #include "globdefs.h"
 #include "platform_config.h"
 #include "tools.h"
@@ -310,6 +311,9 @@ static void displayer_task(void *args) {
 		int bar_peaks[14] = {3, 4, 6, 5, 7, 8, 6, 5, 7, 6, 5, 4, 3, 3};
 		char last_track[SCROLLABLE_SIZE + 1] = "";
 		bool artwork_initialized = false;
+		TickType_t last_active_tick = xTaskGetTickCount();
+		int pwr_state = 0; /* 0 = Active (100% BL, 20FPS), 1 = Eco Dim (25% BL, 2FPS), 2 = Standby (Screen Off) */
+		bool wifi_eco_enabled = false;
 
 		GDS_SetTextWidth(display, GDS_GetWidth(display));
 		GDS_ClearWindow(display, 0, 0, 159, 127, HIFI_BG);
@@ -323,6 +327,45 @@ static void displayer_task(void *args) {
 			bool is_active = (displayer.state == DISPLAYER_ACTIVE);
 			bool is_playing = (displayer.timer && is_active);
 			uint32_t cur_elapsed = 0, cur_duration = 0;
+			TickType_t now_tick = xTaskGetTickCount();
+
+			if (is_active || g_audio_peak_level > 2) {
+				last_active_tick = now_tick;
+				if (wifi_eco_enabled) {
+					esp_wifi_set_ps(WIFI_PS_NONE);
+					wifi_eco_enabled = false;
+					ESP_LOGI(TAG, "Power Manager: Wi-Fi High Performance Mode (WIFI_PS_NONE)");
+				}
+				if (pwr_state != 0) {
+					if (pwr_state == 2) {
+						GDS_DisplayOn(display);
+					}
+					GDS_SetContrast(display, 255);
+					pwr_state = 0;
+					ESP_LOGI(TAG, "Power Manager: Display Woke to Active Mode (100%% Backlight, 20 FPS)");
+				}
+			} else {
+				uint32_t idle_sec = (now_tick - last_active_tick) * portTICK_PERIOD_MS / 1000;
+				if (idle_sec >= 60 && !wifi_eco_enabled) {
+					esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+					wifi_eco_enabled = true;
+					ESP_LOGI(TAG, "Power Manager: Wi-Fi Modem Sleep Enabled (WIFI_PS_MIN_MODEM)");
+				}
+				if (idle_sec >= 180) {
+					if (pwr_state != 2) {
+						GDS_SetContrast(display, 0);
+						GDS_DisplayOff(display);
+						pwr_state = 2;
+						ESP_LOGI(TAG, "Power Manager: Display Standby Off (0%% Backlight, ST7735 Sleep)");
+					}
+					vTaskDelay(pdMS_TO_TICKS(300));
+					continue;
+				} else if (idle_sec >= 30 && pwr_state == 0) {
+					GDS_SetContrast(display, 140);
+					pwr_state = 1;
+					ESP_LOGI(TAG, "Power Manager: Eco Dim Mode (25%% Backlight, 2 FPS)");
+				}
+			}
 
 			xSemaphoreTake(displayer.mutex, portMAX_DELAY);
 
@@ -554,7 +597,7 @@ static void displayer_task(void *args) {
 
 			GDS_Update(display);
 			anim_tick++;
-			vTaskDelay(pdMS_TO_TICKS(50));
+			vTaskDelay(pdMS_TO_TICKS(pwr_state == 1 ? 500 : 50));
 		}
 	}
 
