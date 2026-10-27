@@ -608,14 +608,17 @@ static bool handle_rtsp(raop_ctx_t *ctx, int sock)
 			volume = (volume == -144.0) ? 0 : (1 + volume / 30);
 			success = ctx->cmd_cb(RAOP_VOLUME, volume);
 		} else if (body && (p = strcasestr(body, "progress")) != NULL) {
-			int start, current, stop = 0;
+			uint32_t rtp_start = 0, rtp_curr = 0, rtp_stop = 0;
 
-			// we want ms, not s
-			sscanf(p, "%*[^:]:%u/%u/%u", &start, &current, &stop);
-			current = ((current - start) / 44100) * 1000;
-			if (stop) stop = ((stop - start) / 44100) * 1000;
-			LOG_INFO("[%p]: SET PARAMETER progress %d/%u %s", ctx, current, stop, p);
-			success = ctx->cmd_cb(RAOP_PROGRESS, max(current, 0), stop);
+			// Parse unsigned 32-bit RTP sample timestamps safely and convert to ms
+			sscanf(p, "%*[^:]:%u/%u/%u", &rtp_start, &rtp_curr, &rtp_stop);
+			int32_t diff_curr = (int32_t)(rtp_curr - rtp_start);
+			int32_t diff_stop = (int32_t)(rtp_stop - rtp_start);
+			int current = (diff_curr > 0) ? (int)(((int64_t)diff_curr * 1000) / 44100) : 0;
+			int stop = (rtp_stop && diff_stop > 0) ? (int)(((int64_t)diff_stop * 1000) / 44100) : 0;
+			if (stop > 0 && current > stop) current = stop;
+			LOG_INFO("[%p]: SET PARAMETER progress %d/%d %s", ctx, current, stop, p);
+			success = ctx->cmd_cb(RAOP_PROGRESS, current, stop);
 		} else if (body && ((p = kd_lookup(headers, "Content-Type")) != NULL) && !strcasecmp(p, "application/x-dmap-tagged")) {
 			struct metadata_s metadata;
 			dmap_settings settings = {
@@ -639,6 +642,9 @@ static bool handle_rtsp(raop_ctx_t *ctx, int sock)
             if ((p = kd_lookup(headers, "RTP-Info")) != NULL) sscanf(p, "%*[^=]=%d", &timestamp);
             LOG_INFO("[%p]: received JPEG image of %d bytes (ts:%d)", ctx, len, timestamp);            
 			ctx->cmd_cb(RAOP_ARTWORK, body, len, timestamp);
+		} else if (((p = kd_lookup(headers, "Content-Type")) != NULL) && strcasestr(p, "image/none")) {
+			LOG_INFO("[%p]: received image/none (clearing artwork)", ctx);
+			ctx->cmd_cb(RAOP_ARTWORK, NULL, 0, 0);
 		} else {
 			char *dump = kd_dump(headers);
 			LOG_INFO("Unhandled SET PARAMETER\n%s", dump);

@@ -81,6 +81,7 @@ static EXT_RAM_ATTR struct {
 		int offset;
 	}  artwork;
 	TickType_t tick;
+	TickType_t progress_tick;
 } displayer;
 
 static const char *known_drivers[] = {"SH1106",
@@ -324,7 +325,7 @@ static void displayer_task(void *args) {
 			char track_buf[SCROLLABLE_SIZE + 64];
 			char time_buf[24] = "";
 			bool is_active = (displayer.state == DISPLAYER_ACTIVE);
-			bool is_playing = (displayer.timer && is_active);
+			bool is_playing = is_active && (displayer.timer || g_audio_peak_level > 1);
 			uint32_t cur_elapsed = 0, cur_duration = 0;
 			TickType_t now_tick = xTaskGetTickCount();
 
@@ -362,12 +363,24 @@ static void displayer_task(void *args) {
 				TickType_t now = xTaskGetTickCount();
 				uint32_t dt_ms = (now - displayer.tick) * portTICK_PERIOD_MS;
 				if (dt_ms >= 1000) {
+					uint32_t inc_sec = dt_ms / 1000;
+					if (inc_sec > 5) inc_sec = 1;
 					displayer.tick = now;
-					displayer.elapsed += dt_ms / 1000;
+					displayer.elapsed += inc_sec;
 				}
+			} else {
+				displayer.tick = xTaskGetTickCount();
+			}
+			if (displayer.duration.value > 0 && displayer.elapsed > displayer.duration.value + 3) {
+				displayer.elapsed = displayer.elapsed - displayer.duration.value;
+				displayer.duration.value = 0;
+				displayer.duration.visible = false;
 			}
 			cur_elapsed = displayer.elapsed;
 			cur_duration = displayer.duration.value;
+			if (cur_duration > 0 && cur_elapsed > cur_duration) {
+				cur_elapsed = cur_duration;
+			}
 
 			if (is_active && displayer.header[0]) {
 				strncpy(header_buf, displayer.header, HEADER_SIZE);
@@ -427,10 +440,16 @@ static void displayer_task(void *args) {
 			GDS_SetTextWidth(display, 160);
 
 			if (is_active && (is_playing || cur_elapsed > 0)) {
-				if (cur_duration > 0 && cur_duration < 36000) {
+				if (cur_duration > 0 && cur_duration < 3600) {
 					snprintf(time_buf, sizeof(time_buf), "%u:%02u / %u:%02u",
 						(unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60),
 						(unsigned)(cur_duration / 60), (unsigned)(cur_duration % 60));
+				} else if (cur_duration >= 3600) {
+					snprintf(time_buf, sizeof(time_buf), "%u:%02u:%02u",
+						(unsigned)(cur_elapsed / 3600), (unsigned)((cur_elapsed % 3600) / 60), (unsigned)(cur_elapsed % 60));
+				} else if (cur_elapsed >= 3600) {
+					snprintf(time_buf, sizeof(time_buf), "LIVE %u:%02u:%02u",
+						(unsigned)(cur_elapsed / 3600), (unsigned)((cur_elapsed % 3600) / 60), (unsigned)(cur_elapsed % 60));
 				} else {
 					snprintf(time_buf, sizeof(time_buf), "LIVE  %u:%02u",
 						(unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60));
@@ -725,6 +744,10 @@ void displayer_metadata(char *artist, char *album, char *title) {
 	
 	xSemaphoreTake(displayer.mutex, portMAX_DELAY);
 	
+	char prev_string[SCROLLABLE_SIZE + 1];
+	strncpy(prev_string, displayer.string, SCROLLABLE_SIZE);
+	prev_string[SCROLLABLE_SIZE] = '\0';
+
 	bool has_artist = (artist && *artist);
 	bool has_title  = (title && *title);
 	bool has_album  = (album && *album);
@@ -755,6 +778,26 @@ void displayer_metadata(char *artist, char *album, char *title) {
 	displayer.offset = 0;	
 	utf8_decode(displayer.string);
 	sanitize_ascii(displayer.string);
+
+	TickType_t now = xTaskGetTickCount();
+	if (!has_artist && !has_title && !has_album) {
+		/* App (e.g. YouTube) cleared NowPlayingInfo; discard stale duration from previous app */
+		displayer.elapsed = 0;
+		displayer.duration.value = 0;
+		displayer.duration.visible = false;
+		displayer.tick = now;
+		displayer.timer = true;
+	} else if (strcmp(prev_string, displayer.string) != 0) {
+		/* New track/video started; if no fresh progress packet arrived in the last 1.5s, reset timer */
+		if ((now - displayer.progress_tick) > pdMS_TO_TICKS(1500)) {
+			displayer.elapsed = 0;
+			displayer.duration.value = 0;
+			displayer.duration.visible = false;
+		}
+		displayer.tick = now;
+		displayer.timer = true;
+	}
+
 	ESP_LOGI(TAG, "playing %s", displayer.string);
 	displayer.boundary = GDS_TextStretch(display, 2, displayer.string, SCROLLABLE_SIZE);
 	displayer.refresh = true;
@@ -793,11 +836,18 @@ void displayer_timer(enum displayer_time_e mode, int elapsed, int duration) {
 	
 	xSemaphoreTake(displayer.mutex, portMAX_DELAY);
 
-	if (displayer.timer) displayer.tick = xTaskGetTickCount();
+	TickType_t now = xTaskGetTickCount();
+	displayer.tick = now;
+	displayer.progress_tick = now;
+	displayer.timer = true;
+
 	if (elapsed >= 0) displayer.elapsed = elapsed / 1000;	
 	if (duration > 0) {
 		displayer.duration.visible = true;
 		displayer.duration.value = duration / 1000;
+		if (displayer.elapsed > displayer.duration.value) {
+			displayer.elapsed = displayer.duration.value;
+		}
 
 		if (displayer.duration.value > 3600) sprintf(displayer.duration.string, "%u:%02u:%02u", (displayer.duration.value / 3600) % 10,
 													(displayer.duration.value % 3600) / 60, displayer.duration.value % 60);
@@ -809,7 +859,7 @@ void displayer_timer(enum displayer_time_e mode, int elapsed, int duration) {
 			displayer.duration.visible = false;
 		}
 		free(buf);
-	} else if (!duration) {
+	} else {
 		displayer.duration.visible = false;
 		displayer.duration.value = 0;
 	}
