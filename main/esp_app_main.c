@@ -98,7 +98,7 @@ const DefaultStringVal defaultStringVals[] = {
     {"sleep_config", ""},
     {"led_brightness", ""},
     {"spdif_config", ""},
-    {"dac_config", ""},
+    {"dac_config", CONFIG_DAC_CONFIG},
     {"dac_controlset", ""},
     {"jack_mutes_amp", "n"},
     {"gpio_exp_config", CONFIG_GPIO_EXP_CONFIG},

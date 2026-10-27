@@ -274,6 +274,11 @@ void output_init_i2s(log_level level, char *device, unsigned output_buf_size, ch
 		
 	running = true;
 
+	// Ground GPIO 5 for PCM5102A SCK pin (enables internal PLL)
+	gpio_pad_select_gpio(5);
+	gpio_set_direction(5, GPIO_MODE_OUTPUT);
+	gpio_set_level(5, 0);
+
 	// get SPDIF configuration from NVS or compile
 	char *spdif_config = config_alloc_get_str("spdif_config", CONFIG_SPDIF_CONFIG, "bck=" STR(CONFIG_SPDIF_BCK_IO) 
 											  ",ws=" STR(CONFIG_SPDIF_WS_IO) ",do=" STR(CONFIG_SPDIF_DO_IO));
