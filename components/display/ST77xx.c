@@ -220,8 +220,8 @@ static void SetLayout( struct GDS_Device* Device, struct GDS_Layout *Layout ) {
 #endif	
 }	
 
-static void DisplayOn( struct GDS_Device* Device ) { Device->WriteCommand( Device, 0x11 ); vTaskDelay(pdMS_TO_TICKS(120)); Device->WriteCommand( Device, 0x29 ); }
-static void DisplayOff( struct GDS_Device* Device ) { Device->WriteCommand( Device, 0x28 ); Device->WriteCommand( Device, 0x10 ); }
+static void DisplayOn( struct GDS_Device* Device ) { Device->WriteCommand( Device, 0x29 ); }
+static void DisplayOff( struct GDS_Device* Device ) { Device->WriteCommand( Device, 0x28 ); }
 
 static void SetContrast( struct GDS_Device* Device, uint8_t Contrast ) {
 	Device->WriteCommand( Device, 0x51 );

@@ -903,8 +903,8 @@ void slimproto(log_level level, char *server, u8_t mac[6], const char *name, con
 	if (!slimproto_ip) {
 #if EMBEDDED        
         // on first attempt, try really hard to connect before exiting (and only exit if we are not on another sink)
-		slimproto_ip = discover_server(server, MAX_SERVER_RETRIES * 5);
-        if (!slimproto_ip && !output.external) return;
+		while (running && !(slimproto_ip = discover_server(server, 2))) { sleep(30); }
+        if (!running) return;
 #else        
     	slimproto_ip = discover_server(server, 0);
 #endif    
@@ -993,7 +993,7 @@ void slimproto(log_level level, char *server, u8_t mac[6], const char *name, con
 #if EMBEDDED
 			// in embedded we give up after a while no matter what
 			if (++failed_connect > MAX_SERVER_RETRIES && !server) {
-				slimproto_ip = serv_addr.sin_addr.s_addr = discover_server(NULL, MAX_SERVER_RETRIES);
+				while (running && !(slimproto_ip = serv_addr.sin_addr.s_addr = discover_server(NULL, 2))) { sleep(30); }
 				if (!slimproto_ip && !output.external) return;
 			} else if (reconnect && MAX_SERVER_RETRIES && failed_connect > 5 * MAX_SERVER_RETRIES && !output.external) return;
 #else
