@@ -36,6 +36,7 @@ sure that using rate_delay would fix that
 #include "driver/i2s.h"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
+#include "esp_wifi.h"
 #include "perf_trace.h"
 #include <signal.h>
 #include "adac.h"
@@ -67,7 +68,7 @@ sure that using rate_delay would fix that
  * nicely in one DMA buffer and 2048/450 = 4 buffers + ~1/2 buffer which is acceptable.
  */
 #define DMA_BUF_FRAMES	256
-#define DMA_BUF_COUNT	16
+#define DMA_BUF_COUNT	24
 
 #define DMA_BUF_FRAMES_SPDIF	450
 #define DMA_BUF_COUNT_SPDIF     7
@@ -284,6 +285,7 @@ void output_init_i2s(log_level level, char *device, unsigned output_buf_size, ch
 	};
 	gpio_config(&sck_conf);
 	gpio_set_level(4, 0);
+	esp_wifi_set_ps(WIFI_PS_NONE);
 
 	// get SPDIF configuration from NVS or compile
 	char *spdif_config = config_alloc_get_str("spdif_config", CONFIG_SPDIF_CONFIG, "bck=" STR(CONFIG_SPDIF_BCK_IO) 

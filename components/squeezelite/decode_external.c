@@ -32,7 +32,7 @@ static bool enable_cspot;
 #include "raop_sink.h"
 static bool enable_airplay;
 
-#define RAOP_OUTPUT_SIZE (((RAOP_SAMPLE_RATE * BYTES_PER_FRAME * 100) / 100) & ~BYTES_PER_FRAME)
+#define RAOP_OUTPUT_SIZE (((RAOP_SAMPLE_RATE * BYTES_PER_FRAME * 2 * 120) / 100) & ~BYTES_PER_FRAME)
 #define SYNC_WIN_SLOW	32
 #define SYNC_WIN_CHECK	8
 #define SYNC_WIN_FAST	2
@@ -251,7 +251,7 @@ static bool raop_sink_cmd_handler(raop_event_t event, va_list args)
 			error = raop_sync.sum / min(raop_sync.count, raop_sync.win);
 
 			// wait till we have enough data or there is a strong deviation
-			if ((raop_sync.count >= raop_sync.win && abs(error) > 10) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 100)) {
+			if ((raop_sync.count >= raop_sync.win && abs(error) > 35) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 150)) {
 				if (error < 0) {
 					output.skip_frames = -(error * RAOP_SAMPLE_RATE) / 1000;
 					output.state = OUTPUT_SKIP_FRAMES;					

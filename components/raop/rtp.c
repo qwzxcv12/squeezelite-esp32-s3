@@ -72,7 +72,7 @@ static log_level 	*loglevel = &raop_loglevel;
 
 // default buffer size
 #define BUFFER_FRAMES_MAX 	((RAOP_SAMPLE_RATE * 10) / 352 )
-#define BUFFER_FRAMES_MIN 	( (150 * RAOP_SAMPLE_RATE * 2) / (352 * 100) )
+#define BUFFER_FRAMES_MIN 	( (100 * RAOP_SAMPLE_RATE) / (352 * 100) )
 #define MAX_PACKET       1408
 #define MIN_LATENCY		11025
 #define MAX_LATENCY   	( (120 * RAOP_SAMPLE_RATE * 2) / 100 )
@@ -87,7 +87,7 @@ static log_level 	*loglevel = &raop_loglevel;
 enum { DATA = 0, CONTROL, TIMING };
 
 static const u8_t silence_frame[MAX_PACKET] = { 0 };
-uint32_t buffer_frames = ((150 * RAOP_SAMPLE_RATE * 2) / (352 * 100));
+uint32_t buffer_frames = ((100 * RAOP_SAMPLE_RATE) / (352 * 100));
 
 typedef u16_t seq_t;
 typedef struct __attribute__((__packed__)) audio_buffer_entry {   // decoded audio packets
