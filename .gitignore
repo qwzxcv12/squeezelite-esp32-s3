@@ -19,3 +19,9 @@ envfile.txt
 artifacts
 web-installer
 client_info.h
+
+builder_config.json
+cloud_builder.py
+*.bin
+*.zip
+firmware_download/

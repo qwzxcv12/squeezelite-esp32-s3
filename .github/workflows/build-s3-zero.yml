@@ -1,0 +1,37 @@
+name: Build Squeezelite for ESP32-S3-Zero
+
+on:
+  push:
+    branches: [ "master-v4.3", "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build Firmware in Docker
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/project -w /project sle118/squeezelite-esp32-idfv448:4.4.8 /bin/bash -c "
+            git config --global --add safe.directory /project && \
+            . /opt/esp/idf/export.sh && \
+            echo 'S3-Zero.16.1.master-v4.3' > version.txt && \
+            cp build-scripts/S3-Zero-4MFlash-sdkconfig.defaults sdkconfig && \
+            idf.py build -DDEPTH=16 -DBUILD_NUMBER=1-16
+          "
+
+      - name: Upload Firmware Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: squeezelite-s3-zero
+          path: |
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/ota_data_initial.bin
+            build/recovery.bin
+            build/squeezelite.bin
