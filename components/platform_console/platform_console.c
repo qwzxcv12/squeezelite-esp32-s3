@@ -218,9 +218,9 @@ void process_autoexec(){
 		ESP_LOGI(TAG,"autoexec is set to %s auto-process", autoexec_flag>0?"perform":"skip");
 		if(autoexec_flag == 1) {
 			char *dac = config_alloc_get(NVS_TYPE_STR, "dac_config");
-			if (!dac || strstr(dac, "bck=3") || !strstr(dac, "bck=4")) {
-				ESP_LOGW(TAG, "Updating dac_config in NVS to model=I2S,bck=4,ws=2,do=3");
-				config_set_value(NVS_TYPE_STR, "dac_config", "model=I2S,bck=4,ws=2,do=3");
+			if (!dac || !strstr(dac, "bck=3")) {
+				ESP_LOGW(TAG, "Updating dac_config in NVS to model=I2S,bck=3,ws=1,do=2");
+				config_set_value(NVS_TYPE_STR, "dac_config", "model=I2S,bck=3,ws=1,do=2");
 			}
 			if (dac) free(dac);
 			do {

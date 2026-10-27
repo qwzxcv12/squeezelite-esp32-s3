@@ -66,8 +66,8 @@ sure that using rate_delay would fix that
  * At least, let's make sure it's not a too small amount of samples so 450*4*2=3600 fits 
  * nicely in one DMA buffer and 2048/450 = 4 buffers + ~1/2 buffer which is acceptable.
  */
-#define DMA_BUF_FRAMES	512
-#define DMA_BUF_COUNT	12
+#define DMA_BUF_FRAMES	256
+#define DMA_BUF_COUNT	16
 
 #define DMA_BUF_FRAMES_SPDIF	450
 #define DMA_BUF_COUNT_SPDIF     7
@@ -274,10 +274,16 @@ void output_init_i2s(log_level level, char *device, unsigned output_buf_size, ch
 		
 	running = true;
 
-	// Ground GPIO 5 for PCM5102A SCK pin (enables internal PLL)
-	gpio_pad_select_gpio(5);
-	gpio_set_direction(5, GPIO_MODE_OUTPUT);
-	gpio_set_level(5, 0);
+	// Ground GPIO 4 for PCM5102A SCK pin (enables internal PLL, matching working audio_test.c)
+	gpio_config_t sck_conf = {
+		.pin_bit_mask = (1ULL << 4),
+		.mode = GPIO_MODE_OUTPUT,
+		.pull_up_en = GPIO_PULLUP_DISABLE,
+		.pull_down_en = GPIO_PULLDOWN_ENABLE,
+		.intr_type = GPIO_INTR_DISABLE,
+	};
+	gpio_config(&sck_conf);
+	gpio_set_level(4, 0);
 
 	// get SPDIF configuration from NVS or compile
 	char *spdif_config = config_alloc_get_str("spdif_config", CONFIG_SPDIF_CONFIG, "bck=" STR(CONFIG_SPDIF_BCK_IO) 
@@ -342,7 +348,7 @@ void output_init_i2s(log_level level, char *device, unsigned output_buf_size, ch
 		LOG_INFO("SPDIF using I2S bck:%d, ws:%d, do:%d", i2s_spdif_pin.bck_io_num, i2s_spdif_pin.ws_io_num, i2s_spdif_pin.data_out_num);
 	} else {
 		i2s_config.sample_rate = output.current_sample_rate;
-		i2s_config.bits_per_sample = BYTES_PER_FRAME * 8 / 2;
+		i2s_config.bits_per_sample = 32; // Force 32-bit (64 BCLK) frame for PCM5102A PLL
 		// Counted in frames (but i2s allocates a buffer <= 4092 bytes)
 		i2s_config.dma_buf_len = DMA_BUF_FRAMES;	
 		i2s_config.dma_buf_count = DMA_BUF_COUNT;
