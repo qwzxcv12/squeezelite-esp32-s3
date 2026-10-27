@@ -142,7 +142,7 @@ void GDS_ClearWindow( struct GDS_Device* Device, int x1, int y1, int x2, int y2,
 	} else if (Device->Depth == 8) {
 		CLEAR_WINDOW(x1,y1,x2,y2,Device->Framebuffer,Device->Width,Color,uint8_t,1);
 	} else if (Device->Depth == 16) {
-		CLEAR_WINDOW(x1,y1,x2,y2,Device->Framebuffer,Device->Width,Color,uint16_t,1);
+		CLEAR_WINDOW(x1,y1,x2,y2,Device->Framebuffer,Device->Width,__builtin_bswap16(Color),uint16_t,1);
 	} else if (Device->Depth == 24) {
 		CLEAR_WINDOW(x1,y1,x2,y2,Device->Framebuffer,Device->Width,Color,uint8_t,3);
 	} else {

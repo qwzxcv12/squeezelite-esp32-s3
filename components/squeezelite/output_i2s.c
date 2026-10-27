@@ -640,6 +640,24 @@ static void output_thread_i2s(void *arg) {
 		
 		// run equalizer
 		equalizer_process(obuf, oframes * BYTES_PER_FRAME);
+		{
+			extern volatile uint8_t g_audio_peak_level;
+			if (output.state == OUTPUT_RUNNING && oframes > 0) {
+				s16_t *pcm = (s16_t *)obuf;
+				int32_t peak = 0;
+				size_t step = (oframes * 2) > 64 ? (oframes * 2) / 32 : 2;
+				for (size_t idx = 0; idx < oframes * 2; idx += step) {
+					int32_t v = pcm[idx];
+					if (v < 0) v = -v;
+					if (v > peak) peak = v;
+				}
+				int32_t lvl = (peak * 100) / 18000;
+				if (lvl > 100) lvl = 100;
+				g_audio_peak_level = (uint8_t)lvl;
+			} else {
+				g_audio_peak_level = 0;
+			}
+		}
 
 		// we assume that here we have been able to entirely fill the DMA buffers
 		if (spdif.enabled) {

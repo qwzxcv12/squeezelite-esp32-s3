@@ -9,6 +9,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <arpa/inet.h>
 #include "esp_log.h"
 #include "globdefs.h"
@@ -17,6 +18,7 @@
 #include "display.h"
 #include "services.h"
 #include "gds.h"
+#include "gds_private.h"
 #include "gds_default_if.h"
 #include "gds_draw.h"
 #include "gds_text.h"
@@ -28,11 +30,26 @@ static const char *TAG = "display";
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 
-#define DISPLAYER_STACK_SIZE 	(3*1024)
+#define DISPLAYER_STACK_SIZE 	(6*1024)
 #define SCROLLABLE_SIZE			384
 #define HEADER_SIZE				64
 #define	DEFAULT_SLEEP			3600
 #define ARTWORK_BORDER			1
+
+/* UI/UX Pro Max Dark Hi-Fi Audio Streamer Color Tokens (RGB565) */
+#define HIFI_BG			0x0844  /* Deep Navy #080920 */
+#define HIFI_HEADER		0x18F9  /* Royal Indigo Header #1E1B4B */
+#define HIFI_CARD		0x10E5  /* Elevated Slate Card #111827 */
+#define HIFI_BORDER		0x3190  /* Slate Border #313380 */
+#define HIFI_INDIGO		0x633E  /* Indigo Accent #6366F1 */
+#define HIFI_GREEN		0x262A  /* Hi-Res Emerald #22C55E */
+#define HIFI_CYAN		0x07FF  /* Cyan Spectrum Low #00FFFF */
+#define HIFI_AMBER		0xFDC0  /* Amber Peak/Clock #FBBF24 */
+#define HIFI_SLATE		0x9536  /* Muted Slate Label #94A3B8 */
+#define HIFI_WHITE		0xFFFF  /* Crisp White Text #FFFFFF */
+
+/* Real-time audio peak level (0..100) updated by output_i2s.c */
+volatile uint8_t g_audio_peak_level = 0;
 
 extern const uint8_t default_artwork[]   asm("_binary_note_jpg_start");
 
@@ -78,10 +95,36 @@ static const char *known_drivers[] = {"SH1106",
     
 static void displayer_task(void *args);
 static void display_sleep(void);
+static void hifi_draw_album_box(const uint8_t *jpeg_data);
 
 struct GDS_Device *display;   
 extern GDS_DetectFunc SSD1306_Detect, SSD132x_Detect, SH1106_Detect, SH1122_Detect, SSD1675_Detect, SSD1322_Detect, SSD1351_Detect, ST77xx_Detect, ILI9341_Detect;
 GDS_DetectFunc *drivers[] = { SH1106_Detect, SH1122_Detect, SSD1306_Detect, SSD132x_Detect, SSD1675_Detect, SSD1322_Detect, SSD1351_Detect, ST77xx_Detect, ILI9341_Detect, NULL };
+
+/****************************************************************************************
+ * Render Album Cover JPEG or Hi-Fi Vinyl Graphic into Right Deck Box (X:94..157, Y:48..113)
+ */
+static void hifi_draw_album_box(const uint8_t *jpeg_data) {
+	if (!display || GDS_GetDepth(display) != 16) return;
+
+	GDS_ClearWindow(display, 94, 48, 159, 113, HIFI_CARD);
+
+	if (jpeg_data) {
+		uint16_t orig_h = display->Height;
+		display->Height = 113;
+		GDS_DrawJPEG(display, (uint8_t*)jpeg_data, 95, 49, GDS_IMAGE_CENTER | GDS_IMAGE_FIT);
+		display->Height = orig_h;
+		GDS_ClearWindow(display, 157, 48, 159, 113, HIFI_BG);
+	} else {
+		/* Stylish vector Hi-Fi Vinyl / Disc icon when no JPEG is provided */
+		GDS_DrawBox(display, 108, 62, 143, 99, HIFI_BORDER, true);
+		GDS_DrawBox(display, 114, 68, 137, 93, HIFI_HEADER, true);
+		GDS_DrawBox(display, 122, 76, 129, 85, HIFI_AMBER, true);
+	}
+
+	/* Crisp Indigo border around album box */
+	GDS_DrawBox(display, 94, 48, 157, 113, HIFI_INDIGO, false);
+}
 
 /****************************************************************************************
  * 
@@ -161,23 +204,26 @@ void display_init(char *welcome) {
 		// start the task that will handle scrolling & counting
 		displayer.mutex = xSemaphoreCreateMutex();
 		displayer.by = 2;
-		displayer.pause = 3600;
+		displayer.pause = 0;
 		displayer.speed = 33;
-		displayer.task = xTaskCreateStatic( (TaskFunction_t) displayer_task, "common_displayer", DISPLAYER_STACK_SIZE, NULL, ESP_TASK_PRIO_MIN + 1, xStack, &xTaskBuffer);
-		
+		strcpy(displayer.header, "SQUEEZELITE S3");
+		strcpy(displayer.string, welcome ? welcome : "SQUEEZELITE ESP32-S3");
+
 		// set lines for "fixed" text mode
 		GDS_TextSetFontAuto(display, 1, GDS_FONT_LINE_1, height >= 64 ? 2 : -3);
 		GDS_TextSetFontAuto(display, 2, GDS_FONT_LINE_2, height >= 64 ? 2 : -3);
 		
 		displayer.metadata_config = config_alloc_get(NVS_TYPE_STR, "metadata_config");
 		
-		// leave room for artwork is display is horizontal-style
-		if (strcasestr(displayer.metadata_config, "artwork")) {
-			displayer.artwork.enable = true;
-			displayer.artwork.fit = true;
+		// leave room for artwork if display is horizontal-style
+		displayer.artwork.enable = true;
+		displayer.artwork.fit = true;
+		if (displayer.metadata_config && strcasestr(displayer.metadata_config, "artwork")) {
 			if (height <= 64 && width > height * 2) displayer.artwork.offset = width - height - ARTWORK_BORDER;
 			PARSE_PARAM(displayer.metadata_config, "artwork", ':', displayer.artwork.fit);
 		}	
+
+		displayer.task = xTaskCreateStatic( (TaskFunction_t) displayer_task, "common_displayer", DISPLAYER_STACK_SIZE, NULL, ESP_TASK_PRIO_MIN + 1, xStack, &xTaskBuffer);
         
         // and finally register ourselves to power off upon deep sleep
         services_sleep_setsuspend(display_sleep);
@@ -194,15 +240,223 @@ static void display_sleep(void) {
 }
 
 /****************************************************************************************
- * This is not thread-safe as displayer_task might be in the middle of line drawing
- * but it won't crash (I think) and making it thread-safe would be complicated for a
- * feature which is secondary (the LMS version of scrolling is thread-safe)
+ * Professional Hi-Fi Audio Streamer UI & Continuous Smooth Marquee Task
  */
 static void displayer_task(void *args) {
+	/* Dedicated 20 FPS Hi-Fi Dashboard for 16-bit color 160x128 ST7735 screens */
+	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) >= 160 && GDS_GetHeight(display) >= 128) {
+		int marquee_x = 0;
+		int anim_tick = 0;
+		int bar_heights[10] = {4, 6, 8, 5, 7, 9, 6, 4, 5, 3};
+		int bar_peaks[10]   = {6, 8, 10, 7, 9, 11, 8, 6, 7, 5};
+		char last_track[SCROLLABLE_SIZE + 1] = "";
+		bool artwork_initialized = false;
+
+		GDS_SetTextWidth(display, GDS_GetWidth(display));
+		GDS_ClearWindow(display, 0, 0, 159, 127, HIFI_BG);
+		hifi_draw_album_box(default_artwork);
+		artwork_initialized = true;
+
+		while (1) {
+			char header_buf[HEADER_SIZE + 1];
+			char track_buf[SCROLLABLE_SIZE + 32];
+			char time_buf[24] = "";
+			bool is_active = (displayer.state == DISPLAYER_ACTIVE);
+			bool is_playing = (displayer.timer && is_active);
+			uint32_t cur_elapsed = 0, cur_duration = 0;
+
+			xSemaphoreTake(displayer.mutex, portMAX_DELAY);
+
+			if (is_playing) {
+				TickType_t now = xTaskGetTickCount();
+				uint32_t dt_ms = (now - displayer.tick) * portTICK_PERIOD_MS;
+				if (dt_ms >= 1000) {
+					displayer.tick = now;
+					displayer.elapsed += dt_ms / 1000;
+				}
+			}
+			cur_elapsed = displayer.elapsed;
+			cur_duration = displayer.duration.value;
+
+			if (is_active && displayer.header[0]) {
+				strncpy(header_buf, displayer.header, HEADER_SIZE);
+				header_buf[HEADER_SIZE] = '\0';
+			} else {
+				strcpy(header_buf, "SQUEEZELITE S3");
+			}
+
+			if (is_active) {
+				if (displayer.string[0]) {
+					snprintf(track_buf, sizeof(track_buf), "%s   *   ", displayer.string);
+				} else {
+					strcpy(track_buf, "AIRPLAY HI-FI STREAMING - PCM5102A 32-BIT DAC   *   ");
+				}
+			} else {
+				if (displayer.string[0] && strcasecmp(displayer.string, "SqueezeESP32") != 0) {
+					snprintf(track_buf, sizeof(track_buf), "%s - AIRPLAY HI-FI READY   *   ", displayer.string);
+				} else {
+					strcpy(track_buf, "SQUEEZELITE ESP32-S3 HI-FI STREAMER - AIRPLAY READY   *   ");
+				}
+			}
+
+			if (strcmp(last_track, track_buf) != 0) {
+				strncpy(last_track, track_buf, SCROLLABLE_SIZE);
+				last_track[SCROLLABLE_SIZE] = '\0';
+				marquee_x = 0;
+			}
+
+			if (is_active && !displayer.artwork.updated && !artwork_initialized) {
+				hifi_draw_album_box(default_artwork);
+				artwork_initialized = true;
+			}
+
+			xSemaphoreGive(displayer.mutex);
+
+			/* =========================================================================
+			 * ZONE 1: TOP HEADER BAR (Y: 0..16)
+			 * ========================================================================= */
+			GDS_ClearWindow(display, 0, 0, 159, 15, HIFI_HEADER);
+			GDS_DrawHLine(display, 0, 16, 160, HIFI_INDIGO);
+
+			/* Status Indicator Dot */
+			GDS_DrawBox(display, 4, 5, 9, 10, is_active ? HIFI_GREEN : HIFI_CYAN, true);
+
+			GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
+			GDS_FontDrawString(display, 13, 2, header_buf, is_active ? HIFI_GREEN : HIFI_CYAN);
+
+			if (is_active && (is_playing || cur_elapsed > 0)) {
+				if (cur_duration > 0 && cur_duration < 36000) {
+					snprintf(time_buf, sizeof(time_buf), "%u:%02u/%u:%02u",
+						(unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60),
+						(unsigned)(cur_duration / 60), (unsigned)(cur_duration % 60));
+				} else {
+					snprintf(time_buf, sizeof(time_buf), "%u:%02u",
+						(unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60));
+				}
+				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+				int tw = GDS_FontMeasureString(display, time_buf);
+				GDS_FontDrawString(display, max(82, 157 - tw), 2, time_buf, HIFI_AMBER);
+			} else {
+				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+				GDS_FontDrawString(display, 120, 2, "HI-FI", HIFI_AMBER);
+			}
+
+			/* =========================================================================
+			 * ZONE 2: LINE 2 CONTINUOUS SMOOTH MARQUEE CARD (Y: 18..45)
+			 * ========================================================================= */
+			GDS_ClearWindow(display, 0, 18, 159, 45, HIFI_CARD);
+			GDS_DrawHLine(display, 0, 18, 160, HIFI_BORDER);
+			GDS_DrawHLine(display, 0, 45, 160, HIFI_BORDER);
+
+			GDS_SetFont(display, &Font_line_2);
+			int text_w = GDS_FontMeasureString(display, track_buf);
+			if (text_w < 160) text_w = 160;
+
+			int text_color = is_active ? HIFI_WHITE : HIFI_GREEN;
+			GDS_FontDrawString(display, -marquee_x, 21, track_buf, text_color);
+			if (text_w - marquee_x < 160) {
+				GDS_FontDrawString(display, text_w - marquee_x, 21, track_buf, text_color);
+			}
+			marquee_x = (marquee_x + 2) % text_w;
+
+			/* =========================================================================
+			 * ZONE 3 LEFT: REAL-TIME 10-BAR SPECTRUM DECK (X: 2..91, Y: 48..113)
+			 * ========================================================================= */
+			GDS_ClearWindow(display, 2, 48, 91, 113, HIFI_CARD);
+			GDS_DrawBox(display, 2, 48, 91, 113, HIFI_BORDER, false);
+
+			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+			GDS_FontDrawString(display, 6, 50, is_active ? "PCM 44.1kHz" : "DAC READY", HIFI_SLATE);
+
+			uint8_t peak = g_audio_peak_level;
+			for (int i = 0; i < 10; i++) {
+				int target = 3;
+				if (is_active && peak > 2) {
+					/* Organic frequency band weighting + live jitter */
+					int weight = (i == 0 || i == 9) ? 55 : ((i >= 2 && i <= 6) ? 100 : 80);
+					int jitter = ((anim_tick * 7 + i * 19) % 15) - 7;
+					target = ((int)peak * weight) / 230 + jitter;
+				} else if (is_playing) {
+					/* Fallback animated spectrum if stream volume is very soft */
+					target = 6 + ((anim_tick * 3 + i * 11) % 18);
+				} else {
+					/* Gentle idle wave in standby */
+					int wave = ((anim_tick + i * 3) % 16);
+					if (wave > 8) wave = 16 - wave;
+					target = 2 + wave / 2;
+				}
+
+				if (target < 2) target = 2;
+				if (target > 42) target = 42;
+
+				if (target > bar_heights[i]) {
+					bar_heights[i] = (bar_heights[i] + target * 2) / 3;
+				} else {
+					bar_heights[i] = max(target, bar_heights[i] - 3);
+				}
+
+				if (bar_heights[i] >= bar_peaks[i]) {
+					bar_peaks[i] = bar_heights[i];
+				} else if ((anim_tick & 1) == 0 && bar_peaks[i] > 2) {
+					bar_peaks[i]--;
+				}
+
+				int bx = 6 + i * 8;
+				int by_bottom = 110;
+				int h = bar_heights[i];
+
+				/* Segmented color bar: Cyan bottom -> Green mid -> Amber top */
+				int h_cyan = min(h, 18);
+				if (h_cyan > 0) {
+					GDS_DrawBox(display, bx, by_bottom - h_cyan, bx + 5, by_bottom, HIFI_CYAN, true);
+				}
+				if (h > 18) {
+					int h_green = min(h, 32);
+					GDS_DrawBox(display, bx, by_bottom - h_green, bx + 5, by_bottom - 19, HIFI_GREEN, true);
+				}
+				if (h > 32) {
+					GDS_DrawBox(display, bx, by_bottom - h, bx + 5, by_bottom - 33, HIFI_AMBER, true);
+				}
+
+				/* Peak hold indicator line */
+				int py = by_bottom - bar_peaks[i] - 1;
+				if (py >= 66) {
+					GDS_DrawHLine(display, bx, py, 6, HIFI_WHITE);
+				}
+			}
+
+			/* =========================================================================
+			 * ZONE 4: BOTTOM PROGRESS BAR (X: 2..157, Y: 116..125)
+			 * ========================================================================= */
+			GDS_ClearWindow(display, 2, 116, 157, 125, HIFI_CARD);
+			GDS_DrawBox(display, 2, 116, 157, 125, HIFI_BORDER, false);
+
+			if (is_active && cur_duration > 0) {
+				int fill_w = (int)((cur_elapsed * 151) / cur_duration);
+				if (fill_w > 151) fill_w = 151;
+				if (fill_w > 0) {
+					GDS_DrawBox(display, 4, 118, 4 + fill_w, 123, HIFI_GREEN, true);
+				}
+			} else if (is_active) {
+				/* Indeterminate glowing scanner bar for live AirPlay streams */
+				int pos = (anim_tick * 3) % 120;
+				GDS_DrawBox(display, 4 + pos, 118, min(155, 4 + pos + 32), 123, HIFI_GREEN, true);
+			} else {
+				/* Subtle indigo accent bar in standby */
+				int pos = (anim_tick * 2) % 126;
+				GDS_DrawBox(display, 4 + pos, 119, min(155, 4 + pos + 26), 122, HIFI_INDIGO, true);
+			}
+
+			GDS_Update(display);
+			anim_tick++;
+			vTaskDelay(pdMS_TO_TICKS(50));
+		}
+	}
+
+	/* Legacy monochrome/grayscale display loop */
 	int scroll_sleep = 0, timer_sleep;
 		
 	while (1) {
-		// suspend ourselves if nothing to do
 		if (displayer.state < DISPLAYER_ACTIVE) {
 			if (displayer.state == DISPLAYER_IDLE) GDS_TextLine(display, 2, 0, GDS_TEXT_CLEAR | GDS_TEXT_UPDATE, displayer.string);
 			vTaskSuspend(NULL);
@@ -210,27 +464,19 @@ static void displayer_task(void *args) {
 			GDS_ClearExt(display, true);
 			GDS_TextLine(display, 1, GDS_TEXT_LEFT, GDS_TEXT_UPDATE, displayer.header);
 		} else if (displayer.refresh) {
-			// little trick when switching master while in IDLE and missing it
 			GDS_TextLine(display, 1, GDS_TEXT_LEFT, GDS_TEXT_CLEAR | GDS_TEXT_UPDATE, displayer.header);	
 			scroll_sleep = 0;
 			displayer.refresh = false;			
 		}
 		
-		// we have been waken up before our requested time
 		if (scroll_sleep <= 10) {
-			// something to scroll (or we'll wake-up every pause ms ... no big deal)
 			if (*displayer.string && displayer.state == DISPLAYER_ACTIVE) {
 				xSemaphoreTake(displayer.mutex, portMAX_DELAY);
-				
-				// need to work with local copies as we don't want to suspend caller
 				int offset = -displayer.offset;
 				char *string = strdup(displayer.string);
 				scroll_sleep = displayer.offset ? displayer.speed : displayer.pause;
 				displayer.offset = displayer.offset >= displayer.boundary ? 0 : (displayer.offset + min(displayer.by, displayer.boundary - displayer.offset));			
-				
 				xSemaphoreGive(displayer.mutex);				
-				
-				// now display using safe copies, can be lengthy
 				GDS_TextLine(display, 2, offset, GDS_TEXT_CLEAR | GDS_TEXT_UPDATE, string);
 				free(string);
 			} else {
@@ -238,9 +484,8 @@ static void displayer_task(void *args) {
 			}	
 		}	
 		
-		// handler elapsed track time
 		if (displayer.timer && displayer.state == DISPLAYER_ACTIVE) {
-			char line[19] = "-", *_line = line + 1; // [-]H:MM:SS / H:MM:SS
+			char line[19] = "-", *_line = line + 1;
 			TickType_t tick = xTaskGetTickCount();
 			uint32_t elapsed = (tick - displayer.tick) * portTICK_PERIOD_MS;
 
@@ -250,13 +495,11 @@ static void displayer_task(void *args) {
 				elapsed = displayer.elapsed += elapsed / 1000;
 				xSemaphoreGive(displayer.mutex);
 
-				// when we have duration but no space, display remaining time
 				if (displayer.duration.value && !displayer.duration.visible) elapsed = displayer.duration.value - elapsed;
 
 				if (elapsed < 3600) sprintf(_line, "%u:%02u", elapsed / 60, elapsed % 60);
 				else sprintf(_line, "%u:%02u:%02u", (elapsed / 3600) % 100, (elapsed % 3600) / 60, elapsed % 60);
 
-				// concatenate if we have room for elapsed / duration
 				if (displayer.duration.visible) {
 					strcat(_line, "/");
 					strcat(_line, displayer.duration.string);
@@ -264,22 +507,17 @@ static void displayer_task(void *args) {
 					_line--;
 				}
 
-				// just re-write the whole line it's easier
 				GDS_TextLine(display, 1, GDS_TEXT_LEFT, GDS_TEXT_CLEAR, displayer.header);	
 				GDS_TextLine(display, 1, GDS_TEXT_RIGHT, GDS_TEXT_UPDATE, _line);
 				
-				// if we have not received artwork after 5s, display a default icon
 				if (displayer.artwork.active && !displayer.artwork.updated && tick - displayer.artwork.tick > pdMS_TO_TICKS(5000)) {
-					ESP_LOGI(TAG, "no artwork received, setting default");
 					displayer_artwork((uint8_t*) default_artwork);
 				}	
 				timer_sleep = 1000;
 			} else timer_sleep = max(1000 - elapsed, 0);	
 		} else timer_sleep = DEFAULT_SLEEP;
 		
-		// then sleep the min amount of time
 		int sleep = min(scroll_sleep, timer_sleep);
-		ESP_LOGD(TAG, "timers s:%d t:%d", scroll_sleep, timer_sleep);
 		scroll_sleep -= sleep;
 		vTaskDelay(sleep / portTICK_PERIOD_MS);
 	}
@@ -288,7 +526,21 @@ static void displayer_task(void *args) {
 /****************************************************************************************
  * 
  */
-void displayer_artwork(uint8_t *data) {
+static void displayer_artwork_unlocked(uint8_t *data) {
+	if (!display) return;
+
+	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) >= 160 && GDS_GetHeight(display) >= 128) {
+		if (data) {
+			displayer.artwork.updated = true;
+			hifi_draw_album_box(data);
+		} else {
+			displayer.artwork.updated = false;
+			displayer.artwork.tick = xTaskGetTickCount();
+			hifi_draw_album_box(default_artwork);
+		}
+		return;
+	}
+
 	if (!displayer.artwork.active) return;
 	
 	int x = displayer.artwork.offset ? displayer.artwork.offset + ARTWORK_BORDER : 0;
@@ -302,95 +554,82 @@ void displayer_artwork(uint8_t *data) {
 		displayer.artwork.updated = false;
 		displayer.artwork.tick = xTaskGetTickCount();
 	}	
-	
+}
+
+void displayer_artwork(uint8_t *data) {
+	if (!display) return;
+	xSemaphoreTake(displayer.mutex, portMAX_DELAY);
+	displayer_artwork_unlocked(data);
+	xSemaphoreGive(displayer.mutex);
 }
 
 /****************************************************************************************
  * 
  */
 bool displayer_can_artwork(void) {
-	return displayer.artwork.active;
+	return displayer.artwork.active || (display && GDS_GetDepth(display) == 16);
+}
+
+/****************************************************************************************
+ * Sanitize decoded string so all characters are printable 7-bit ASCII (32..126)
+ */
+static void sanitize_ascii(char *s) {
+	for (; s && *s; s++) {
+		uint8_t c = (uint8_t)*s;
+		if (c < 32 || c > 126) *s = ' ';
+	}
 }
 
 /****************************************************************************************
  * 
  */
 void displayer_metadata(char *artist, char *album, char *title) {
-	char *string = displayer.string, *p;
-	int len = SCROLLABLE_SIZE;
-	
-	// need a display!
 	if (!display) return;
-	
-	// just do title if there is no config set
-	if (!displayer.metadata_config) {
-		strncpy(displayer.string, title ? title : "", SCROLLABLE_SIZE);
-		return;
-	}
 	
 	xSemaphoreTake(displayer.mutex, portMAX_DELAY);
 	
-	// format metadata parameters and write them directly
-	if ((p = strcasestr(displayer.metadata_config, "format")) != NULL) {
-		char token[16], *q;
-		int space = len;
-		bool skip = false;
-			
-		displayer.string[0] = '\0';	
-		p = strchr(displayer.metadata_config, '=');
-			
-		while (p++) {
-			// find token and copy what's after when reaching last one
-			if (sscanf(p, "%*[^%%]%%%[^%]%%", token) < 0) {
-				q = strchr(p, ',');
-				strncat(string, p, q ? min(q - p, space) : space);
-				break;
-			}
+	bool has_artist = (artist && *artist);
+	bool has_title  = (title && *title);
+	bool has_album  = (album && *album);
 
-			// copy what's before token (be safe)
-			if ((q = strchr(p, '%')) == NULL) break;
-			
-			// skip whatever is after a token if this token is empty
-			if (!skip) {
-				strncat(string, p, min(q - p, space));
-				space = len - strlen(string);
-			}	
-
-			// then copy token's content
-			if (!strncasecmp(q + 1, "artist", 6) && artist) strncat(string, p = artist, space);
-			else if (!strncasecmp(q + 1, "album", 5) && album) strncat(string, p = album, space);
-			else if (!strncasecmp(q + 1, "title", 5) && title) strncat(string, p = title, space);
-			space = len - strlen(string);
-				
-			// flag to skip the data following an empty field
-			if (*p) skip = false;
-			else skip = true;
-
-			// advance to next separator
-			p = strchr(q + 1, '%');
-		}
+	if (has_artist && has_title && has_album) {
+		snprintf(displayer.string, SCROLLABLE_SIZE, "%s - %s (%s)", artist, title, album);
+	} else if (has_artist && has_title) {
+		snprintf(displayer.string, SCROLLABLE_SIZE, "%s - %s", artist, title);
+	} else if (has_title && has_album) {
+		snprintf(displayer.string, SCROLLABLE_SIZE, "%s (%s)", title, album);
+	} else if (has_title) {
+		strncpy(displayer.string, title, SCROLLABLE_SIZE);
+	} else if (has_artist) {
+		strncpy(displayer.string, artist, SCROLLABLE_SIZE);
+	} else if (has_album) {
+		strncpy(displayer.string, album, SCROLLABLE_SIZE);
 	} else {
-		strncpy(string, title ? title : "", SCROLLABLE_SIZE);
+		strcpy(displayer.string, "AIRPLAY HI-FI STREAM");
 	}
+	displayer.string[SCROLLABLE_SIZE] = '\0';
 	
 	// get optional scroll speed & pause
-	PARSE_PARAM(displayer.metadata_config, "speed", '=', displayer.speed);
-	PARSE_PARAM(displayer.metadata_config, "pause", '=', displayer.pause);
+	if (displayer.metadata_config) {
+		PARSE_PARAM(displayer.metadata_config, "speed", '=', displayer.speed);
+		PARSE_PARAM(displayer.metadata_config, "pause", '=', displayer.pause);
+	}
 	
 	displayer.offset = 0;	
 	utf8_decode(displayer.string);
+	sanitize_ascii(displayer.string);
 	ESP_LOGI(TAG, "playing %s", displayer.string);
 	displayer.boundary = GDS_TextStretch(display, 2, displayer.string, SCROLLABLE_SIZE);
 	displayer.refresh = true;
 		
 	xSemaphoreGive(displayer.mutex);
+	if (displayer.task) vTaskResume(displayer.task);
 }	
 
 /****************************************************************************************
  *
  */
 void displayer_scroll(char *string, int speed, int pause) {
-	// need a display!
 	if (!display) return;
 	
 	xSemaphoreTake(displayer.mutex, portMAX_DELAY);
@@ -398,19 +637,21 @@ void displayer_scroll(char *string, int speed, int pause) {
 	if (speed) displayer.speed = speed;
 	if (pause) displayer.pause = pause;
 	displayer.offset = 0;	
-	strncpy(displayer.string, string, SCROLLABLE_SIZE);
+	strncpy(displayer.string, string ? string : "", SCROLLABLE_SIZE);
 	displayer.string[SCROLLABLE_SIZE] = '\0';
+	utf8_decode(displayer.string);
+	sanitize_ascii(displayer.string);
 	displayer.boundary = GDS_TextStretch(display, 2, displayer.string, SCROLLABLE_SIZE);
 	displayer.refresh = true;
 		
 	xSemaphoreGive(displayer.mutex);
+	if (displayer.task) vTaskResume(displayer.task);
 }
 
 /****************************************************************************************
  * 
  */
 void displayer_timer(enum displayer_time_e mode, int elapsed, int duration) {
-	// need a display!
 	if (!display) return;
 	
 	xSemaphoreTake(displayer.mutex, portMAX_DELAY);
@@ -428,7 +669,6 @@ void displayer_timer(enum displayer_time_e mode, int elapsed, int duration) {
 		char *buf;
 		asprintf(&buf, "%s %s/%s", displayer.header, displayer.duration.string, displayer.duration.string);
 		if (GDS_GetTextWidth(display, 1, 0, buf) > GDS_GetWidth(display)) {
-			ESP_LOGW(TAG, "Can't fit duration %s (%d) on screen using elapsed only", buf, GDS_GetTextWidth(display, 1, 0, buf));
 			displayer.duration.visible = false;
 		}
 		free(buf);
@@ -441,7 +681,7 @@ void displayer_timer(enum displayer_time_e mode, int elapsed, int duration) {
 }	
 
 /****************************************************************************************
- * See above comment
+ * 
  */
 void displayer_control(enum displayer_cmd_e cmd, ...) {
 	va_list args;
@@ -455,7 +695,7 @@ void displayer_control(enum displayer_cmd_e cmd, ...) {
 	case DISPLAYER_ACTIVATE: {	
 		char *header = va_arg(args, char*);
 		displayer.artwork.active = displayer.artwork.enable && va_arg(args, int);
-		strncpy(displayer.header, header, HEADER_SIZE);
+		strncpy(displayer.header, header ? header : "AIRPLAY", HEADER_SIZE);
 		displayer.header[HEADER_SIZE] = '\0';
 		displayer.state = DISPLAYER_ACTIVE;
 		displayer.timer = false;
@@ -465,20 +705,18 @@ void displayer_control(enum displayer_cmd_e cmd, ...) {
 		displayer.duration.visible = false;
 		displayer.offset = displayer.boundary = 0;
 		display_bus(&displayer, DISPLAY_BUS_TAKE);
-		if (displayer.artwork.active) GDS_SetTextWidth(display, displayer.artwork.offset);
+		if (displayer.artwork.active && GDS_GetDepth(display) < 16) GDS_SetTextWidth(display, displayer.artwork.offset);
 		vTaskResume(displayer.task);
 		break;
 	}	
 	case DISPLAYER_SUSPEND:		
-		// task will display the line 2 from beginning and suspend
 		displayer.state = DISPLAYER_IDLE;
-		displayer_artwork(NULL);
+		displayer_artwork_unlocked(NULL);
 		display_bus(&displayer, DISPLAY_BUS_GIVE);
 		break;		
 	case DISPLAYER_SHUTDOWN:
-		// let the task self-suspend (we might be doing i2c_write)
 		GDS_SetTextWidth(display, 0);
-		displayer_artwork(NULL);
+		displayer_artwork_unlocked(NULL);
 		displayer.state = DISPLAYER_DOWN;
 		display_bus(&displayer, DISPLAY_BUS_GIVE);
 		break;

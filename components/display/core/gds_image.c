@@ -59,7 +59,7 @@ static inline int Scaler555(uint8_t *Pixels) {
 }
 
 static inline int Scaler565(uint8_t *Pixels) {
-	return ((Pixels[2] & ~0x07) << 8) | ((Pixels[1] & ~0x03) << 3) | (Pixels[0] >> 3);
+	return ((Pixels[0] & ~0x07) << 8) | ((Pixels[1] & ~0x03) << 3) | (Pixels[2] >> 3);
 }
 
 static inline int Scaler666(uint8_t *Pixels) {
@@ -134,9 +134,9 @@ static unsigned OutHandler(JDEC *Decoder, void *Bitmap, JRECT *Frame) {
 // version as X,Y may be beyond screen				
 #define OUTHANDLERDIRECT(F,S)																		\
 	for (int y = Frame->top; y <= Frame->bottom; y++) {												\
-		if (y < Context->YMin) continue;															\
+		/* keep Pixels aligned even if y < YMin */													\
 		for (int x = Frame->left; x <= Frame->right; x++) {											\
-			if (x < Context->XMin) continue;														\
+			if (y >= Context->YMin && x >= Context->XMin)											\
 			DrawPixel( Context->Device, x + Context->XOfs, y + Context->YOfs, F(Pixels) >> S);	\
 			Pixels += 3;																			\
 		}																							\
