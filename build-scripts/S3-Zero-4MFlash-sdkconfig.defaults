@@ -297,7 +297,7 @@ CONFIG_VOLUME_ROTARY_ENCODER=""
 #
 # end of Battery measure
 
-CONFIG_DEFAULT_COMMAND_LINE="squeezelite -o I2S -b 500:1000 -d all=info -C 30 -W"
+CONFIG_DEFAULT_COMMAND_LINE="squeezelite -o I2S -b 256:900 -d all=info -C 30 -W"
 # end of Squeezelite-ESP32
 
 #

@@ -236,9 +236,10 @@ void process_autoexec(){
 					}
 					else {
 						char *b_pos = strstr(autoexec_value, "-b 500:2000");
+						if (!b_pos) b_pos = strstr(autoexec_value, "-b 500:1000");
 						if (b_pos) {
-							ESP_LOGW(TAG, "Fixing buffer size from -b 500:2000 to -b 500:1000 for 2MB PSRAM");
-							memcpy(b_pos, "-b 500:1000", 11);
+							ESP_LOGW(TAG, "Optimizing buffer size to -b 256:900 for 2MB PSRAM + AirPlay");
+							memcpy(b_pos, "-b 256:900 ", 11);
 							config_set_value(NVS_TYPE_STR, autoexec_name, autoexec_value);
 						}
 						ESP_LOGI(TAG,"Running command %s = %s", autoexec_name, autoexec_value);

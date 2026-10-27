@@ -380,7 +380,11 @@ static void buffer_alloc(abuf_t *audio_buffer, int size, uint8_t *buf, size_t bu
     LOG_INFO("allocated %d buffers (min=%d) from buffer of %zu bytes", buffer_frames, BUFFER_FRAMES_MIN, buf_size + buffer_frames * size);
     
     for(; buffer_frames < BUFFER_FRAMES_MIN; buffer_frames++) {
-		audio_buffer[buffer_frames].data = malloc(size);        
+		audio_buffer[buffer_frames].data = malloc(size);
+		if (!audio_buffer[buffer_frames].data) {
+			LOG_WARN("RTP buffer malloc full at %d frames", buffer_frames);
+			break;
+		}
 		audio_buffer[buffer_frames].allocated = 1;
 		audio_buffer[buffer_frames].ready = 0;
 	}

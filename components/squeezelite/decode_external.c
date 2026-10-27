@@ -32,7 +32,7 @@ static bool enable_cspot;
 #include "raop_sink.h"
 static bool enable_airplay;
 
-#define RAOP_OUTPUT_SIZE (((RAOP_SAMPLE_RATE * BYTES_PER_FRAME * 2 * 120) / 100) & ~BYTES_PER_FRAME)
+#define RAOP_OUTPUT_SIZE (((RAOP_SAMPLE_RATE * BYTES_PER_FRAME * 100) / 100) & ~BYTES_PER_FRAME)
 #define SYNC_WIN_SLOW	32
 #define SYNC_WIN_CHECK	8
 #define SYNC_WIN_FAST	2
