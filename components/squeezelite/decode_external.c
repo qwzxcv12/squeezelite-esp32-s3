@@ -183,6 +183,8 @@ static bool bt_sink_cmd_handler(bt_sink_cmd_t cmd, va_list args)
 		break;
 	case BT_SINK_VOLUME: {
 		u32_t volume = va_arg(args, u32_t);
+		extern void display_set_volume(int pct);
+		display_set_volume((int)(volume * 100 / 128));
 		volume = 65536 * powf(volume / 128.0f, 3);
 		set_volume(volume, volume);
 		break;
@@ -329,6 +331,8 @@ static bool raop_sink_cmd_handler(raop_event_t event, va_list args)
 		case RAOP_VOLUME: {
 			float volume = va_arg(args, double);
 			LOG_INFO("Volume[0..1] %0.4f", volume);
+			extern void display_set_volume(int pct);
+			display_set_volume((int)roundf(volume * 100.0f));
 			volume = 65536 * powf(volume, 3);
 			set_volume(volume, volume);
 			break;

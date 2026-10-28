@@ -46,6 +46,7 @@ static EXT_RAM_ATTR struct button_s {
 	int shifter_gpio;	// this one is just for post-creation						
 	int	long_press;
 	bool long_timer, shifted, shifting;
+	bool repeating;
 	int type, level;	
 	TimerHandle_t timer;
 } buttons[MAX_BUTTONS];
@@ -139,19 +140,33 @@ static void buttons_polling( TimerHandle_t xTimer ) {
 /****************************************************************************************
  * Buttons timer handler for press/longpress
  */
+#define BUTTON_REPEAT_PERIOD_MS 180
+
 static void buttons_handler(struct button_s *button, int level) {
 	button->level = level;
 
 	if (button->shifter && button->shifter->type == button->shifter->level) button->shifter->shifting = true;
 
-	if (button->long_press && !button->long_timer && button->level == button->type) {
+	if (button->long_press && !button->long_timer && !button->repeating && button->level == button->type) {
 		// detect a long press, so hold event generation
 		ESP_LOGD(TAG, "setting long timer gpio:%u level:%u", button->gpio, button->level);
 		xTimerChangePeriod(button->timer, button->long_press / portTICK_RATE_MS, 0);
 		button->long_timer = true;
+	} else if (button->repeating && button->level == button->type) {
+		// Continuous hold auto-repeat: send long-press event repeatedly while held down
+		ESP_LOGD(TAG, "sending repeat event for gpio:%u", button->gpio);
+		xQueueSend(button_queue, button, 0);
+		xTimerChangePeriod(button->timer, BUTTON_REPEAT_PERIOD_MS / portTICK_RATE_MS, 0);
 	} else {
+		if (button->long_timer && button->level == button->type) {
+			// First long-press reached! Start repeating mode
+			button->repeating = true;
+			xTimerChangePeriod(button->timer, BUTTON_REPEAT_PERIOD_MS / portTICK_RATE_MS, 0);
+		} else {
+			button->repeating = false;
+		}
 		// send a button pressed/released event (content is copied in queue)
-		ESP_LOGD(TAG, "sending event for gpio:%u level:%u", button->gpio, button->level);
+		ESP_LOGD(TAG, "sending event for gpio:%u level:%u (repeating:%u)", button->gpio, button->level, (unsigned)button->repeating);
 		// queue will have a copy of button's context
 		xQueueSend(button_queue, button, 0);
 		button->long_timer = false;
@@ -211,15 +226,20 @@ static void buttons_task(void* arg) {
 					}
 					// button is a copy, so need to go to real context
 					button.self->shifting = false;
+					button.self->repeating = false;
 				} else if (!button.shifting) {
 					// normal long press and not shifting so don't discard
 					button.handler(button.client, BUTTON_PRESSED, press, true);
 				}  
 			} else {
-				// normal press/release of a button or release of a long-press button
-				if (!button.shifting) button.handler(button.client, event, press, button.long_press);
+				// normal press/release of a button or release of a long-press button or repeat event
+				bool is_long = (button.long_press != 0) || button.repeating;
+				if (!button.shifting) button.handler(button.client, event, press, is_long);
 				// button is a copy, so need to go to real context
 				button.self->shifting = false;
+				if (event == BUTTON_RELEASED) {
+					button.self->repeating = false;
+				}
 			}
 		} else if (xActivatedMember == rotary.queue) {
 			rotary_encoder_event_t event = { 0 };

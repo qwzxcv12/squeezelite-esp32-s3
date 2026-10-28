@@ -114,6 +114,21 @@ static uint16_t g_osd_color = HIFI_CYAN;
 static TickType_t g_tactile_led_expire = 0;
 static uint8_t g_tactile_r = 0, g_tactile_g = 0, g_tactile_b = 0;
 
+volatile int g_system_volume_pct = 50; /* 0..100% */
+
+void display_set_volume(int pct) {
+	if (pct < 0) pct = 0;
+	if (pct > 100) pct = 100;
+	g_system_volume_pct = pct;
+	snprintf(g_osd_text, sizeof(g_osd_text), "VOL: %d%%", g_system_volume_pct);
+	g_osd_color = HIFI_CYAN;
+	g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1500);
+}
+
+int display_get_volume(void) {
+	return g_system_volume_pct;
+}
+
 bool display_button_hook(int gpio, actrls_action_e action, button_event_e event, button_press_e press, bool long_press) {
 	if (event != BUTTON_PRESSED) return false;
 	
@@ -139,12 +154,16 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 	switch (gpio) {
 	case 13: /* K1 - Prev Track (Click) / Volume Down (Hold) */
 		if (long_press) {
-			/* Vol Down */
-			snprintf(g_osd_text, sizeof(g_osd_text), "VOL -");
+			/* Vol Down (Continuous Hold Auto-Repeat) */
+			if (g_system_volume_pct > 0) {
+				if (g_system_volume_pct >= 5) g_system_volume_pct -= 5;
+				else g_system_volume_pct = 0;
+			}
+			snprintf(g_osd_text, sizeof(g_osd_text), "VOL: %d%%", g_system_volume_pct);
 			g_osd_color = HIFI_CYAN;
-			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1500);
 			g_tactile_r = 0; g_tactile_g = 60; g_tactile_b = 100;
-			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			g_tactile_led_expire = now + pdMS_TO_TICKS(140);
 			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		} else {
 			/* Prev */
@@ -159,12 +178,16 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 		
 	case 14: /* K2 - Next Track (Click) / Volume Up (Hold) */
 		if (long_press) {
-			/* Vol Up */
-			snprintf(g_osd_text, sizeof(g_osd_text), "VOL +");
+			/* Vol Up (Continuous Hold Auto-Repeat) */
+			if (g_system_volume_pct < 100) {
+				if (g_system_volume_pct <= 95) g_system_volume_pct += 5;
+				else g_system_volume_pct = 100;
+			}
+			snprintf(g_osd_text, sizeof(g_osd_text), "VOL: %d%%", g_system_volume_pct);
 			g_osd_color = HIFI_VIOLET;
-			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1500);
 			g_tactile_r = 80; g_tactile_g = 0; g_tactile_b = 120;
-			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			g_tactile_led_expire = now + pdMS_TO_TICKS(140);
 			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		} else {
 			/* Next */
@@ -660,7 +683,22 @@ static void displayer_task(void *args) {
 				GDS_SetFont(display, &Font_droid_sans_fallback_15x17);
 				int otw = GDS_FontMeasureString(display, g_osd_text);
 				int ox = max(14, 80 - otw / 2);
-				GDS_FontDrawString(display, ox, 25, g_osd_text, g_osd_color);
+				int oy = (strncmp(g_osd_text, "VOL", 3) == 0) ? 23 : 25;
+				GDS_FontDrawString(display, ox, oy, g_osd_text, g_osd_color);
+
+				/* If volume OSD, draw a sleek high-precision volume meter bar underneath */
+				if (strncmp(g_osd_text, "VOL", 3) == 0) {
+					int bar_x = 24;
+					int bar_w = 112;
+					int fill_w = (bar_w * g_system_volume_pct) / 100;
+					if (fill_w > bar_w) fill_w = bar_w;
+					GDS_DrawHLine(display, bar_x, 41, bar_w, HIFI_TRACK);
+					GDS_DrawHLine(display, bar_x, 42, bar_w, HIFI_TRACK);
+					if (fill_w > 0) {
+						GDS_DrawHLine(display, bar_x, 41, fill_w, g_osd_color);
+						GDS_DrawHLine(display, bar_x, 42, fill_w, g_osd_color);
+					}
+				}
 			} else {
 				hifi_fill_round_rect(4, 20, 152, 26, HIFI_CARD, HIFI_PILL);
 

@@ -46,3 +46,5 @@ char * display_get_supported_drivers(void);
 #include "buttons.h"
 #include "audio_controls.h"
 bool display_button_hook(int gpio, actrls_action_e action, button_event_e event, button_press_e press, bool long_press);
+void display_set_volume(int pct);
+int display_get_volume(void);
