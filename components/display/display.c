@@ -208,27 +208,21 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 		}
 		return false; /* Pass to audio_controls to trigger ACTRLS_NEXT / ACTRLS_VOLUP */
 		
-	case 15: /* K3 - Play/Pause (Click) / Seek Rewind -10s (Hold) */
+	case 15: /* K3 - Play/Pause (Click) / Seek Rewind (Hold) */
 		if (long_press) {
-			/* Seek Rewind (-10s) with 400ms repeat throttle */
-			static TickType_t s_last_rew_tick = 0;
-			if (now - s_last_rew_tick < pdMS_TO_TICKS(400)) {
-				return true;
-			}
-			s_last_rew_tick = now;
-
-			snprintf(g_osd_text, sizeof(g_osd_text), "<< REW -10s");
+			snprintf(g_osd_text, sizeof(g_osd_text), "<< REWIND");
 			g_osd_color = HIFI_GOLD;
 			g_osd_expire_tick = now + pdMS_TO_TICKS(1500);
 			g_tactile_r = 120; g_tactile_g = 50; g_tactile_b = 0;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
 			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 
-			/* Shift display timeline scrubber back 10s */
-			if (displayer.elapsed > 10) displayer.elapsed -= 10;
+			/* Shift display timeline scrubber back 2s each repeat */
+			if (displayer.elapsed > 2) displayer.elapsed -= 2;
 			else displayer.elapsed = 0;
 			displayer.tick = now;
 			displayer.progress_tick = now;
+			return false; /* Pass to audio_controls to trigger ACTRLS_REW */
 		} else {
 			/* Play / Pause Toggle */
 			bool is_currently_playing = (displayer.state == DISPLAYER_ACTIVE && (displayer.timer || g_audio_peak_level > 1));
@@ -246,24 +240,17 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 		}
 		return false; /* Pass to audio_controls to trigger ACTRLS_TOGGLE / ACTRLS_REW */
 		
-	case 16: /* K4 - Brightness / Sleep (Click) / Seek Forward +10s (Hold) */
+	case 16: /* K4 - Brightness / Sleep (Click) / Seek Forward (Hold) */
 		if (long_press) {
-			/* Seek Forward (+10s) with 400ms repeat throttle */
-			static TickType_t s_last_fwd_tick = 0;
-			if (now - s_last_fwd_tick < pdMS_TO_TICKS(400)) {
-				return true;
-			}
-			s_last_fwd_tick = now;
-
-			snprintf(g_osd_text, sizeof(g_osd_text), "FWD +10s >>");
+			snprintf(g_osd_text, sizeof(g_osd_text), "FORWARD >>");
 			g_osd_color = HIFI_GOLD;
 			g_osd_expire_tick = now + pdMS_TO_TICKS(1500);
 			g_tactile_r = 120; g_tactile_g = 50; g_tactile_b = 0;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
 			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 
-			/* Shift display timeline scrubber forward 10s */
-			displayer.elapsed += 10;
+			/* Shift display timeline scrubber forward 2s each repeat */
+			displayer.elapsed += 2;
 			if (displayer.duration.value > 0 && displayer.elapsed > displayer.duration.value) {
 				displayer.elapsed = displayer.duration.value;
 			}

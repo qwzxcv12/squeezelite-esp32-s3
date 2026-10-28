@@ -291,37 +291,12 @@ bool raop_cmd(struct raop_ctx_s *ctx, raop_event_t event, void *param) {
 
 	// first notify the remote controller (if any)
 	switch(event) {
-		case RAOP_REW: {
-			extern int display_get_elapsed(void);
-			extern int display_get_duration(void);
-			uint32_t now_tick = xTaskGetTickCount();
-			int elapsed = ctx->progress.current + (ctx->progress.tick ? pdTICKS_TO_MS(now_tick - ctx->progress.tick) : 0);
-			if (elapsed <= 0) elapsed = display_get_elapsed() * 1000;
-			int target = elapsed - 10000;
-			if (target < 0) target = 0;
-			ctx->progress.current = target;
-			ctx->progress.tick = now_tick;
-			asprintf(&command, "setproperty?dacp.playingtime=%d", target);
-			LOG_INFO("[%p]: AirPlay seek REWIND -10s to %d ms (was %d ms)", ctx, target, elapsed);
-			if (ctx->cmd_cb) ctx->cmd_cb(RAOP_PROGRESS, target, ctx->progress.duration ? ctx->progress.duration : (display_get_duration() * 1000));
+		case RAOP_REW:
+			command = strdup("beginrew");
 			break;
-		}
-		case RAOP_FWD: {
-			extern int display_get_elapsed(void);
-			extern int display_get_duration(void);
-			uint32_t now_tick = xTaskGetTickCount();
-			int elapsed = ctx->progress.current + (ctx->progress.tick ? pdTICKS_TO_MS(now_tick - ctx->progress.tick) : 0);
-			if (elapsed <= 0) elapsed = display_get_elapsed() * 1000;
-			int target = elapsed + 10000;
-			int dur = ctx->progress.duration ? ctx->progress.duration : (display_get_duration() * 1000);
-			if (dur > 0 && target > dur) target = dur;
-			ctx->progress.current = target;
-			ctx->progress.tick = now_tick;
-			asprintf(&command, "setproperty?dacp.playingtime=%d", target);
-			LOG_INFO("[%p]: AirPlay seek FORWARD +10s to %d ms (was %d ms)", ctx, target, elapsed);
-			if (ctx->cmd_cb) ctx->cmd_cb(RAOP_PROGRESS, target, dur);
+		case RAOP_FWD:
+			command = strdup("beginff");
 			break;
-		}
 		case RAOP_PREV:
 			command = strdup("previtem");
 			break;
