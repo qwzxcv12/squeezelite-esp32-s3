@@ -82,7 +82,7 @@ static void buttons_handler(struct button_s *button, int level);
  */
 static void common_task_init(void) {
 	static DRAM_ATTR StaticTask_t xTaskBuffer __attribute__ ((aligned (4)));
-	static EXT_RAM_ATTR StackType_t xStack[BUTTON_STACK_SIZE] __attribute__ ((aligned (4)));
+	static DRAM_ATTR StackType_t xStack[BUTTON_STACK_SIZE] __attribute__ ((aligned (4)));
 	
 	if (!common_queue_set) {
 		common_queue_set = xQueueCreateSet(BUTTON_QUEUE_LEN + 1);

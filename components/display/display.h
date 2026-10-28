@@ -42,3 +42,7 @@ void displayer_artwork(uint8_t *data);
 void displayer_timer(enum displayer_time_e mode, int elapsed, int duration);
 bool displayer_can_artwork(void);
 char * display_get_supported_drivers(void);
+
+#include "buttons.h"
+#include "audio_controls.h"
+bool display_button_hook(int gpio, actrls_action_e action, button_event_e event, button_press_e press, bool long_press);

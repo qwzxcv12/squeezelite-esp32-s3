@@ -66,6 +66,7 @@ static const char * actrls_action_s[ ] = { EP(ACTRLS_POWER),EP(ACTRLS_VOLUP),EP(
 									EP(KNOB_LEFT),EP(KNOB_RIGHT),EP(KNOB_PUSH), EP(ACTRLS_SLEEP),
 									""} ;
 									
+extern bool display_button_hook(int gpio, actrls_action_e action, button_event_e event, button_press_e press, bool long_press);
 static const char * TAG = "audio controls";
 static actrls_config_t *json_config;
 cJSON * control_profiles = NULL;
@@ -205,6 +206,9 @@ static void control_handler(void *client, button_event_e event, button_press_e p
 	}
 	
 	ESP_LOGD(TAG, "control gpio:%u press:%u long:%u event:%u action:%u", key->gpio, press, long_press, event, action_detail.action);
+
+	// Call universal display button hook (wakes screen, flashes LED, handles K4 LCD/LED modes)
+	if (display_button_hook(key->gpio, action_detail.action, event, press, long_press)) return;
 
 	// stop here if control hook served the request
 	if (current_hook && (*current_hook)(key->gpio, action_detail.action, event, press, long_press)) return;
@@ -556,8 +560,12 @@ static esp_err_t actrls_init_json(const char *profile_name, bool create) {
 	char *config;
 	const cJSON *button;
 	
-	if (!profile_name) return ESP_OK;
+	if (!profile_name || !*profile_name) profile_name = "buttons";
 	if ((config = config_alloc_get_str(profile_name, NULL, CONFIG_AUDIO_CONTROLS)) == NULL) return ESP_FAIL;
+	if (!*config && strlen(CONFIG_AUDIO_CONTROLS) > 0) {
+		free(config);
+		config = strdup(CONFIG_AUDIO_CONTROLS);
+	}
 	if (!*config) goto exit;
 		
 	ESP_LOGD(TAG,"Parsing JSON structure %s", config);

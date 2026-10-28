@@ -453,11 +453,15 @@ void app_main()
 
 	if(!is_recovery_running){
 		ESP_LOGD(TAG,"Getting audio control mapping ");
-		char *actrls_config = config_alloc_get_default(NVS_TYPE_STR, "actrls_config", "", 0);
+		char *actrls_config = config_alloc_get_default(NVS_TYPE_STR, "actrls_config", "buttons", 0);
+		if (!actrls_config || !*actrls_config) {
+			if (actrls_config) free(actrls_config);
+			actrls_config = strdup("buttons");
+		}
 		if (actrls_init(actrls_config) == ESP_OK) {
-			ESP_LOGD(TAG,"Initializing audio control buttons type %s", actrls_config);	
+			ESP_LOGI(TAG,"Initializing audio control buttons type %s", actrls_config);	
 		} else {
-			ESP_LOGD(TAG,"No audio control buttons");
+			ESP_LOGW(TAG,"No audio control buttons");
 		}
 		if (actrls_config) free(actrls_config);
 	}
