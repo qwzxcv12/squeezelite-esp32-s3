@@ -378,25 +378,41 @@ static void hifi_draw_vinyl_disc(int cx, int cy, int anim_tick, bool spinning) {
 static void hifi_draw_album_box(const uint8_t *jpeg_data) {
 	if (!display || GDS_GetDepth(display) != 16) return;
 
-	GDS_ClearWindow(display, 102, 49, 159, 107, HIFI_BG);
-	hifi_fill_round_rect(102, 49, 54, 59, HIFI_CARD, HIFI_PILL);
+	bool is_portrait = (GDS_GetWidth(display) < GDS_GetHeight(display));
 
-	if (jpeg_data && jpeg_data != default_artwork) {
-		g_has_custom_artwork = true;
-		uint16_t orig_h = display->Height;
-		display->Height = 105;
-		GDS_DrawJPEG(display, (uint8_t*)jpeg_data, 104, 51, GDS_IMAGE_CENTER | GDS_IMAGE_FIT);
-		display->Height = orig_h;
-		GDS_ClearWindow(display, 156, 49, 159, 107, HIFI_BG);
+	if (is_portrait) {
+		/* Centered Album Deck in Portrait: X: 36..91, Y: 20..75 (W:56, H:56, center 64, 48) */
+		GDS_ClearWindow(display, 36, 20, 91, 75, HIFI_BG);
+		hifi_fill_round_rect(36, 20, 56, 56, HIFI_CARD, HIFI_PILL);
+
+		if (jpeg_data && jpeg_data != default_artwork) {
+			g_has_custom_artwork = true;
+			uint16_t orig_h = display->Height;
+			display->Height = 73;
+			GDS_DrawJPEG(display, (uint8_t*)jpeg_data, 38, 22, GDS_IMAGE_CENTER | GDS_IMAGE_FIT);
+			display->Height = orig_h;
+		} else {
+			g_has_custom_artwork = false;
+			hifi_draw_vinyl_disc(64, 48, 0, false);
+		}
 	} else {
-		g_has_custom_artwork = false;
-		hifi_draw_vinyl_disc(129, 78, 0, false);
+		/* Right Deck Box in Landscape: X: 102..155, Y: 49..107 */
+		GDS_ClearWindow(display, 102, 49, 159, 107, HIFI_BG);
+		hifi_fill_round_rect(102, 49, 54, 59, HIFI_CARD, HIFI_PILL);
+
+		if (jpeg_data && jpeg_data != default_artwork) {
+			g_has_custom_artwork = true;
+			uint16_t orig_h = display->Height;
+			display->Height = 105;
+			GDS_DrawJPEG(display, (uint8_t*)jpeg_data, 104, 51, GDS_IMAGE_CENTER | GDS_IMAGE_FIT);
+			display->Height = orig_h;
+			GDS_ClearWindow(display, 156, 49, 159, 107, HIFI_BG);
+		} else {
+			g_has_custom_artwork = false;
+			hifi_draw_vinyl_disc(129, 78, 0, false);
+		}
 	}
 }
-
-/****************************************************************************************
- * 
- */
 void display_init(char *welcome) {
 	bool init = false;
 	char *config = config_alloc_get_str("display_config", CONFIG_DISPLAY_CONFIG, "N/A");
@@ -515,8 +531,326 @@ static void displayer_task(void *args) {
 	if (is_recovery_running) {
 		vTaskSuspend(NULL);
 	}
-	/* Dedicated 20 FPS Sleek Dark OLED Dashboard for 16-bit color 160x128 ST7735 screens */
-	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) >= 160 && GDS_GetHeight(display) >= 128) {
+		/* =========================================================================
+	 * DEDICATED 20 FPS SLEEK DARK OLED DASHBOARD FOR 128x160 PORTRAIT SCREENS
+	 * ========================================================================= */
+	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) < GDS_GetHeight(display)) {
+		int marquee_x = 0;
+		int anim_tick = 0;
+		int bar_segs[14]  = {2, 3, 5, 4, 6, 7, 5, 4, 6, 5, 4, 3, 2, 2};
+		int bar_peaks[14] = {3, 4, 6, 5, 7, 8, 6, 5, 7, 6, 5, 4, 3, 3};
+		char last_track[SCROLLABLE_SIZE + 1] = "";
+		bool artwork_initialized = false;
+		TickType_t last_active_tick = xTaskGetTickCount();
+		int pwr_state = 0;
+
+		GDS_SetTextWidth(display, GDS_GetWidth(display));
+		GDS_ClearWindow(display, 0, 0, 127, 159, HIFI_BG);
+		hifi_draw_album_box(NULL);
+		artwork_initialized = true;
+
+		while (1) {
+			char header_buf[HEADER_SIZE + 1];
+			char track_buf[SCROLLABLE_SIZE + 64];
+			char time_buf[24] = "";
+			bool is_active = (displayer.state == DISPLAYER_ACTIVE);
+			bool is_playing = is_active && (displayer.timer || g_audio_peak_level > 1);
+			uint32_t cur_elapsed = 0, cur_duration = 0;
+			TickType_t now_tick = xTaskGetTickCount();
+
+			if (g_last_user_activity > last_active_tick) {
+				last_active_tick = g_last_user_activity;
+			}
+
+			if (g_display_sleep_forced) {
+				if (pwr_state != 2) {
+					GDS_SetContrast(display, 0);
+					GDS_DisplayOff(display);
+					pwr_state = 2;
+					if (led_display) led_vu_color_all(0, 0, 0);
+				}
+				vTaskDelay(pdMS_TO_TICKS(200));
+				continue;
+			}
+
+			bool user_active = (is_active || g_audio_peak_level > 2 || (now_tick - last_active_tick) < pdMS_TO_TICKS(60000));
+
+			if (user_active) {
+				if (pwr_state != 0 && g_backlight_level > 0) {
+					if (pwr_state == 2) GDS_DisplayOn(display);
+					GDS_SetContrast(display, g_backlight_level);
+					pwr_state = 0;
+				}
+			} else {
+				if (pwr_state == 0 && g_backlight_level > 0) {
+					GDS_SetContrast(display, min(g_backlight_level, (uint8_t)140));
+					pwr_state = 1;
+				}
+			}
+
+			xSemaphoreTake(displayer.mutex, portMAX_DELAY);
+
+			if (is_playing) {
+				TickType_t now = xTaskGetTickCount();
+				uint32_t dt_ms = (now - displayer.tick) * portTICK_PERIOD_MS;
+				if (dt_ms >= 1000) {
+					uint32_t inc_sec = dt_ms / 1000;
+					if (inc_sec > 5) inc_sec = 1;
+					displayer.tick = now;
+					displayer.elapsed += inc_sec;
+				}
+			} else {
+				displayer.tick = xTaskGetTickCount();
+			}
+			if (displayer.duration.value > 0 && displayer.elapsed > displayer.duration.value + 3) {
+				displayer.elapsed = displayer.elapsed - displayer.duration.value;
+				displayer.duration.value = 0;
+				displayer.duration.visible = false;
+			}
+			cur_elapsed = displayer.elapsed;
+			cur_duration = displayer.duration.value;
+			if (cur_duration > 0 && cur_elapsed > cur_duration) {
+				cur_elapsed = cur_duration;
+			}
+
+			if (is_active && displayer.header[0]) {
+				strncpy(header_buf, displayer.header, HEADER_SIZE);
+				header_buf[HEADER_SIZE] = '\0';
+			} else {
+				strcpy(header_buf, "HI-FI S3");
+			}
+
+			if (is_active) {
+				if (displayer.string[0]) {
+					snprintf(track_buf, sizeof(track_buf), "%s     -     ", displayer.string);
+				} else {
+					strcpy(track_buf, "AirPlay Lossless  -  PCM5102A DAC     -     ");
+				}
+			} else {
+				if (displayer.string[0] && strcasecmp(displayer.string, "SqueezeESP32") != 0) {
+					snprintf(track_buf, sizeof(track_buf), "%s     -     ", displayer.string);
+				} else {
+					strcpy(track_buf, "Squeezelite S3  -  Hi-Fi Ready     -     ");
+				}
+			}
+
+			if (strcmp(last_track, track_buf) != 0) {
+				strncpy(last_track, track_buf, SCROLLABLE_SIZE);
+				last_track[SCROLLABLE_SIZE] = '\0';
+				marquee_x = 0;
+			}
+
+			if (is_active && !displayer.artwork.updated && !artwork_initialized) {
+				hifi_draw_album_box(NULL);
+				artwork_initialized = true;
+			}
+
+			xSemaphoreGive(displayer.mutex);
+
+			/* Clear background around cards */
+			GDS_ClearWindow(display, 0, 0, 127, 19, HIFI_BG);
+			GDS_ClearWindow(display, 0, 20, 35, 76, HIFI_BG);
+			GDS_ClearWindow(display, 92, 20, 127, 76, HIFI_BG);
+			GDS_ClearWindow(display, 0, 77, 127, 78, HIFI_BG);
+			GDS_ClearWindow(display, 0, 104, 127, 105, HIFI_BG);
+			GDS_ClearWindow(display, 0, 124, 127, 125, HIFI_BG);
+			GDS_ClearWindow(display, 0, 158, 127, 159, HIFI_BG);
+
+			/* -------------------------------------------------------------
+			 * ZONE 1: HEADER PILL (X:4..123, Y:2..17)
+			 * ------------------------------------------------------------- */
+			hifi_fill_round_rect(4, 2, 120, 16, HIFI_CARD, HIFI_PILL);
+			uint16_t dot_col = is_active ? ((anim_tick & 8) ? HIFI_EMERALD : HIFI_CYAN) : HIFI_CYAN;
+			GDS_DrawBox(display, 10, 8, 13, 11, dot_col, true);
+
+			GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
+			GDS_SetTextWidth(display, 64);
+			GDS_FontDrawString(display, 17, 4, header_buf, HIFI_WHITE);
+			GDS_SetTextWidth(display, 128);
+
+			if (is_active && (is_playing || cur_elapsed > 0)) {
+				snprintf(time_buf, sizeof(time_buf), "%u:%02u", (unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60));
+				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+				int tw = GDS_FontMeasureString(display, time_buf);
+				GDS_FontDrawString(display, max(75, 118 - tw), 4, time_buf, HIFI_CYAN);
+			} else {
+				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+				GDS_FontDrawString(display, 80, 4, "32-BIT", HIFI_GOLD);
+			}
+
+			/* -------------------------------------------------------------
+			 * ZONE 2: VINYL RECORD (X:36..91, Y:20..76)
+			 * ------------------------------------------------------------- */
+			uint8_t peak = g_audio_peak_level;
+			if (!g_has_custom_artwork) {
+				hifi_draw_vinyl_disc(64, 48, anim_tick, is_active && (is_playing || peak > 2));
+			}
+
+			/* -------------------------------------------------------------
+			 * ZONE 3: TRACK MARQUEE / OSD (X:4..123, Y:79..103)
+			 * ------------------------------------------------------------- */
+			bool show_osd = (xTaskGetTickCount() < g_osd_expire_tick && g_osd_text[0] != '\0');
+			if (show_osd) {
+				hifi_fill_round_rect(4, 79, 120, 25, HIFI_CARD, g_osd_color);
+				GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
+				int otw = GDS_FontMeasureString(display, g_osd_text);
+				int ox = max(8, 64 - otw / 2);
+				int oy = (strncmp(g_osd_text, "VOL", 3) == 0) ? 81 : 85;
+				GDS_FontDrawString(display, ox, oy, g_osd_text, g_osd_color);
+
+				if (strncmp(g_osd_text, "VOL", 3) == 0) {
+					int bar_x = 14;
+					int bar_w = 100;
+					int fill_w = (bar_w * g_system_volume_pct) / 100;
+					if (fill_w > bar_w) fill_w = bar_w;
+					GDS_DrawHLine(display, bar_x, 96, bar_w, HIFI_TRACK);
+					GDS_DrawHLine(display, bar_x, 97, bar_w, HIFI_TRACK);
+					if (fill_w > 0) {
+						GDS_DrawHLine(display, bar_x, 96, fill_w, g_osd_color);
+						GDS_DrawHLine(display, bar_x, 97, fill_w, g_osd_color);
+					}
+				}
+			} else {
+				hifi_fill_round_rect(4, 79, 120, 25, HIFI_CARD, HIFI_PILL);
+				GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
+				int text_w = GDS_FontMeasureString(display, track_buf);
+				if (text_w < 112) text_w = 112;
+
+				int text_color = is_active ? HIFI_WHITE : HIFI_CYAN;
+				GDS_SetTextWidth(display, 119);
+				GDS_FontDrawString(display, 8 - marquee_x, 85, track_buf, text_color);
+				if (8 + text_w - marquee_x < 119) {
+					GDS_FontDrawString(display, 8 + text_w - marquee_x, 85, track_buf, text_color);
+				}
+				GDS_SetTextWidth(display, 128);
+
+				/* Clip edges */
+				GDS_ClearWindow(display, 0, 79, 3, 103, HIFI_BG);
+				GDS_ClearWindow(display, 124, 79, 127, 103, HIFI_BG);
+				marquee_x = (marquee_x + 2) % text_w;
+			}
+
+			/* -------------------------------------------------------------
+			 * ZONE 4: SCRUBBER TIMELINE (X:4..123, Y:106..123)
+			 * ------------------------------------------------------------- */
+			hifi_fill_round_rect(4, 106, 120, 18, HIFI_CARD, HIFI_PILL);
+			if (cur_duration > 0 && cur_duration < 3600) {
+				snprintf(time_buf, sizeof(time_buf), "%u:%02u / %u:%02u",
+					(unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60),
+					(unsigned)(cur_duration / 60), (unsigned)(cur_duration % 60));
+			} else {
+				snprintf(time_buf, sizeof(time_buf), "%u:%02u", (unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60));
+			}
+			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+			int timew = GDS_FontMeasureString(display, time_buf);
+			GDS_FontDrawString(display, max(8, 64 - timew / 2), 108, time_buf, HIFI_CYAN);
+
+			/* Progress bar line at Y: 121 */
+			GDS_DrawHLine(display, 10, 121, 108, HIFI_TRACK);
+			int fill_w = 0;
+			if (is_active && cur_duration > 0) {
+				fill_w = (int)((cur_elapsed * 108) / cur_duration);
+				if (fill_w > 108) fill_w = 108;
+				if (fill_w > 0) GDS_DrawHLine(display, 10, 121, fill_w, HIFI_CYAN);
+			}
+
+			/* -------------------------------------------------------------
+			 * ZONE 5: 14-BAND EQUALIZER SPECTRUM (X:4..123, Y:126..157)
+			 * ------------------------------------------------------------- */
+			hifi_fill_round_rect(4, 126, 120, 31, HIFI_CARD, HIFI_PILL);
+
+			/* Micro header */
+			uint16_t ico_col = is_active ? HIFI_EMERALD : HIFI_VIOLET;
+			GDS_DrawVLine(display, 9, 129, 6, ico_col);
+			GDS_DrawVLine(display, 10, 130, 4, ico_col);
+			GDS_DrawVLine(display, 11, 131, 2, ico_col);
+
+			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+			GDS_FontDrawString(display, 16, 127, is_active ? "44.1kHz PCM" : "DAC READY", HIFI_SLATE);
+
+			/* 14 spectrum bars */
+			for (int i = 0; i < 14; i++) {
+				int target = 1;
+				if (is_active && peak > 2) {
+					int dist = (i < 6) ? (6 - i) : (i - 6);
+					int weight = 105 - dist * 9;
+					int jitter = ((anim_tick * 5 + i * 17) % 5) - 2;
+					target = ((int)peak * weight) / 1000 + jitter;
+				} else if (is_playing) {
+					target = 2 + ((anim_tick * 2 + i * 7) % 5);
+				} else {
+					int wave = ((anim_tick + i * 2) % 14);
+					if (wave > 7) wave = 14 - wave;
+					target = 1 + (wave / 3);
+				}
+
+				if (target < 1) target = 1;
+				if (target > 7) target = 7;
+
+				if (target > bar_segs[i]) {
+					bar_segs[i] = (bar_segs[i] + target * 2) / 3;
+					if (bar_segs[i] < target) bar_segs[i]++;
+				} else if (bar_segs[i] > target) {
+					bar_segs[i]--;
+				}
+
+				if (bar_segs[i] >= bar_peaks[i]) {
+					bar_peaks[i] = bar_segs[i];
+				} else if ((anim_tick & 1) == 0 && bar_peaks[i] > 1) {
+					bar_peaks[i]--;
+				}
+
+				int bx = 9 + i * 8; /* 14 bars * 8px = 112px */
+				for (int s = 0; s < 7; s++) {
+					int sy = 153 - s * 3;
+					uint16_t seg_col = HIFI_TRACK;
+					if (s < bar_segs[i]) {
+						if (s < 2) seg_col = HIFI_VIOLET;
+						else if (s < 4) seg_col = HIFI_CYAN;
+						else if (s < 6) seg_col = HIFI_EMERALD;
+						else seg_col = HIFI_ROSE;
+					} else if (s == bar_peaks[i] && s > 0) {
+						seg_col = HIFI_WHITE;
+					}
+					GDS_DrawHLine(display, bx, sy, 5, seg_col);
+					GDS_DrawHLine(display, bx, sy + 1, 5, seg_col);
+				}
+			}
+
+			/* Onboard WS2812 LED synchronization */
+			if (led_display) {
+				if (now_tick < g_tactile_led_expire) {
+					led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+				} else if (is_active && is_playing && peak > 1) {
+					int bri = (peak * 3) / 2;
+					if (bri > 120) bri = 120;
+					if (bri < 15)  bri = 15;
+					if (peak > 55) {
+						led_vu_color_all(bri, bri / 5, bri / 2);
+					} else if (peak > 30) {
+						led_vu_color_all(0, bri, bri);
+					} else {
+						led_vu_color_all(bri / 3, 0, bri);
+					}
+				} else if (is_active) {
+					int wave = (anim_tick % 40);
+					if (wave > 20) wave = 40 - wave;
+					uint8_t b = 4 + wave / 2;
+					led_vu_color_all(0, b / 2, b);
+				} else {
+					int wave = (anim_tick % 60);
+					if (wave > 30) wave = 60 - wave;
+					uint8_t b = 3 + wave / 3;
+					led_vu_color_all(b, b / 2, 0);
+				}
+			}
+
+			GDS_Update(display);
+			anim_tick++;
+			vTaskDelay(pdMS_TO_TICKS(pwr_state == 1 ? 500 : 50));
+		}
+	} else /* Dedicated 20 FPS Sleek Dark OLED Dashboard for 16-bit color 160x128 ST7735 screens */
+	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) >= 120 && GDS_GetHeight(display) >= 120) {
 		int marquee_x = 0;
 		int anim_tick = 0;
 		int bar_segs[14]  = {2, 3, 5, 4, 6, 7, 5, 4, 6, 5, 4, 3, 2, 2};
@@ -958,7 +1292,7 @@ static void displayer_task(void *args) {
 static void displayer_artwork_unlocked(uint8_t *data) {
 	if (!display) return;
 
-	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) >= 160 && GDS_GetHeight(display) >= 128) {
+	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) >= 120 && GDS_GetHeight(display) >= 120) {
 		if (data) {
 			displayer.artwork.updated = true;
 			hifi_draw_album_box(data);
