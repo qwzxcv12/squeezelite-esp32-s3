@@ -178,7 +178,7 @@ CONFIG_SPI_CONFIG="mosi=8,clk=7,dc=10"
 CONFIG_DISPLAY_CONFIG="width=160,height=128,driver=ST7735,rotate,HFlip,cswap,SPI,cs=11,reset=9,back=12"
 CONFIG_ETH_CONFIG=""
 CONFIG_DAC_CONTROLSET=""
-CONFIG_AUDIO_CONTROLS="[{\"gpio\":13,\"type\":\"BUTTON_LOW\",\"pull\":true,\"debounce\":50,\"long_press\":500,\"normal\":{\"pressed\":\"ACTRLS_PREV\"},\"longpress\":{\"pressed\":\"ACTRLS_VOLDOWN\"}},{\"gpio\":14,\"type\":\"BUTTON_LOW\",\"pull\":true,\"debounce\":50,\"long_press\":500,\"normal\":{\"pressed\":\"ACTRLS_NEXT\"},\"longpress\":{\"pressed\":\"ACTRLS_VOLUP\"}},{\"gpio\":15,\"type\":\"BUTTON_LOW\",\"pull\":true,\"debounce\":50,\"long_press\":700,\"normal\":{\"pressed\":\"ACTRLS_TOGGLE\"},\"longpress\":{\"pressed\":\"ACTRLS_REW\"}},{\"gpio\":16,\"type\":\"BUTTON_LOW\",\"pull\":true,\"debounce\":50,\"long_press\":700,\"normal\":{\"pressed\":\"BCTRLS_DOWN\"},\"longpress\":{\"pressed\":\"ACTRLS_FWD\"}}]"
+CONFIG_AUDIO_CONTROLS="[{\"gpio\":13,\"type\":\"BUTTON_LOW\",\"pull\":true,\"debounce\":50,\"long_press\":500,\"normal\":{\"pressed\":\"ACTRLS_PREV\"},\"longpress\":{\"pressed\":\"ACTRLS_VOLDOWN\"}},{\"gpio\":14,\"type\":\"BUTTON_LOW\",\"pull\":true,\"debounce\":50,\"long_press\":500,\"normal\":{\"pressed\":\"ACTRLS_NEXT\"},\"longpress\":{\"pressed\":\"ACTRLS_VOLUP\"}},{\"gpio\":15,\"type\":\"BUTTON_LOW\",\"pull\":true,\"debounce\":50,\"long_press\":500,\"normal\":{\"pressed\":\"ACTRLS_TOGGLE\"},\"longpress\":{\"pressed\":\"ACTRLS_REW\"}},{\"gpio\":16,\"type\":\"BUTTON_LOW\",\"pull\":true,\"debounce\":50,\"long_press\":500,\"normal\":{\"pressed\":\"BCTRLS_DOWN\"},\"longpress\":{\"pressed\":\"ACTRLS_FWD\"}}]"
 CONFIG_BAT_CONFIG=""
 CONFIG_TARGET=""
 CONFIG_AMP_GPIO=-1
