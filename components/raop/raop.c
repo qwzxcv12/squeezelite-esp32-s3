@@ -292,7 +292,7 @@ bool raop_cmd(struct raop_ctx_s *ctx, raop_event_t event, void *param) {
 	// first notify the remote controller (if any)
 	switch(event) {
 		case RAOP_REW:
-			command = strdup("beginrew");
+			command = strdup("mutetoggle");
 			break;
 		case RAOP_FWD:
 			command = strdup("beginff");

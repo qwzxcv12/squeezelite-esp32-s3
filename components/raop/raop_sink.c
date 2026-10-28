@@ -83,37 +83,15 @@ static void raop_next(bool pressed) {
 }
 
 static void raop_rew(bool pressed) {
-	static bool s_rewinding = false;
-	if (pressed) {
-		if (!s_rewinding) {
-			s_rewinding = true;
-			raop_cmd(raop, RAOP_REW, NULL);
-			LOG_INFO("AirPlay begin rewind");
-		}
-	} else {
-		if (s_rewinding) {
-			s_rewinding = false;
-			raop_cmd(raop, RAOP_RESUME, NULL);
-			LOG_INFO("AirPlay playresume");
-		}
-	}
+	if (!pressed) return;
+	raop_cmd(raop, RAOP_REW, NULL);
+	LOG_INFO("AirPlay mutetoggle");
 }
 
 static void raop_fwd(bool pressed) {
-	static bool s_forwarding = false;
-	if (pressed) {
-		if (!s_forwarding) {
-			s_forwarding = true;
-			raop_cmd(raop, RAOP_FWD, NULL);
-			LOG_INFO("AirPlay begin fast-forward");
-		}
-	} else {
-		if (s_forwarding) {
-			s_forwarding = false;
-			raop_cmd(raop, RAOP_RESUME, NULL);
-			LOG_INFO("AirPlay playresume");
-		}
-	}
+	if (!pressed) return;
+	raop_cmd(raop, RAOP_FWD, NULL);
+	LOG_INFO("AirPlay forward");
 }
 
 const static actrls_t controls = {
