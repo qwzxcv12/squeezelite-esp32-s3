@@ -57,147 +57,6 @@ static bool g_has_custom_artwork = false;
 extern struct led_strip_t* led_display;
 extern void led_vu_color_all(uint8_t r, uint8_t g, uint8_t b);
 
-/* =========================================================================
- * BUTTON HOOK & TACTILE UI / OSD FEEDBACK STATE
- * ========================================================================= */
-typedef enum {
-	LED_MODE_BEAT = 0,     /* Default: Live audio beat visualizer */
-	LED_MODE_RAINBOW = 1,  /* Smooth rainbow color cycle */
-	LED_MODE_STATIC = 2,   /* Soft warm amber glow */
-	LED_MODE_OFF = 3       /* Completely off */
-} led_mode_t;
-
-static volatile led_mode_t g_led_mode = LED_MODE_BEAT;
-static volatile uint8_t g_backlight_level = 255; /* 255 (100%), 140 (50%), 50 (20%), 0 (Off) */
-static volatile bool g_display_sleep_forced = false;
-static volatile TickType_t g_last_user_activity = 0;
-
-/* On-Screen Display (OSD) feedback overlay */
-static char g_osd_text[32] = "";
-static TickType_t g_osd_expire_tick = 0;
-static uint16_t g_osd_color = HIFI_CYAN;
-static TickType_t g_tactile_led_expire = 0;
-static uint8_t g_tactile_r = 0, g_tactile_g = 0, g_tactile_b = 0;
-
-bool display_button_hook(int gpio, actrls_action_e action, button_event_e event, button_press_e press, bool long_press) {
-	if (event != BUTTON_PRESSED) return false;
-	
-	g_last_user_activity = xTaskGetTickCount();
-	ESP_LOGI(TAG, "BUTTON PRESSED: GPIO=%d, action=%d, long=%d", gpio, action, (int)long_press);
-	
-	/* 1. Wake screen if it was sleeping or dimmed */
-	if (g_display_sleep_forced && gpio != 14 && gpio != 16) {
-		g_display_sleep_forced = false;
-	}
-	
-	/* 2. Process based on GPIO */
-	switch (gpio) {
-	case 13: /* K1 */
-		if (long_press) {
-			/* Vol Down */
-			snprintf(g_osd_text, sizeof(g_osd_text), "VOL -");
-			g_osd_color = HIFI_CYAN;
-			g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1200);
-			g_tactile_r = 0; g_tactile_g = 60; g_tactile_b = 100;
-			g_tactile_led_expire = xTaskGetTickCount() + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		} else {
-			/* Prev */
-			snprintf(g_osd_text, sizeof(g_osd_text), "|<< PREV");
-			g_osd_color = HIFI_CYAN;
-			g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1200);
-			g_tactile_r = 0; g_tactile_g = 40; g_tactile_b = 120;
-			g_tactile_led_expire = xTaskGetTickCount() + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		}
-		return false; /* Pass to audio_controls to trigger ACTRLS */
-		
-	case 14: /* K2 */
-		if (long_press) {
-			/* Standby / Sleep */
-			g_display_sleep_forced = !g_display_sleep_forced;
-			snprintf(g_osd_text, sizeof(g_osd_text), g_display_sleep_forced ? "STANDBY" : "WAKE");
-			g_osd_color = HIFI_ROSE;
-			g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1500);
-			g_tactile_r = 120; g_tactile_g = 20; g_tactile_b = 20;
-			g_tactile_led_expire = xTaskGetTickCount() + pdMS_TO_TICKS(200);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		} else {
-			/* Play / Pause */
-			snprintf(g_osd_text, sizeof(g_osd_text), "> ||");
-			g_osd_color = HIFI_EMERALD;
-			g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1200);
-			g_tactile_r = 0; g_tactile_g = 120; g_tactile_b = 30;
-			g_tactile_led_expire = xTaskGetTickCount() + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		}
-		return false; /* Pass to audio_controls to trigger ACTRLS */
-		
-	case 15: /* K3 */
-		if (long_press) {
-			/* Vol Up */
-			snprintf(g_osd_text, sizeof(g_osd_text), "VOL +");
-			g_osd_color = HIFI_VIOLET;
-			g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1200);
-			g_tactile_r = 80; g_tactile_g = 0; g_tactile_b = 120;
-			g_tactile_led_expire = xTaskGetTickCount() + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		} else {
-			/* Next */
-			snprintf(g_osd_text, sizeof(g_osd_text), "NEXT >>|");
-			g_osd_color = HIFI_VIOLET;
-			g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1200);
-			g_tactile_r = 100; g_tactile_g = 0; g_tactile_b = 80;
-			g_tactile_led_expire = xTaskGetTickCount() + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		}
-		return false; /* Pass to audio_controls to trigger ACTRLS */
-		
-	case 16: /* K4 - Function key: Screen & LED */
-		if (long_press) {
-			/* Cycle LED RGB mode */
-			g_led_mode = (g_led_mode + 1) % 4;
-			const char *mode_names[] = {"LED: BEAT", "LED: RAINBOW", "LED: WARM", "LED: OFF"};
-			snprintf(g_osd_text, sizeof(g_osd_text), "%s", mode_names[g_led_mode]);
-			g_osd_color = HIFI_GOLD;
-			g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1500);
-			if (led_display) {
-				if (g_led_mode == LED_MODE_BEAT) led_vu_color_all(0, 100, 80);
-				else if (g_led_mode == LED_MODE_RAINBOW) led_vu_color_all(100, 60, 0);
-				else if (g_led_mode == LED_MODE_STATIC) led_vu_color_all(80, 40, 5);
-				else led_vu_color_all(0, 0, 0);
-			}
-		} else {
-			/* Cycle Screen Backlight */
-			if (g_backlight_level == 255) g_backlight_level = 140;      /* 50% */
-			else if (g_backlight_level == 140) g_backlight_level = 50;  /* 20% */
-			else if (g_backlight_level == 50) g_backlight_level = 0;    /* Off */
-			else g_backlight_level = 255;                               /* 100% */
-			
-			const char *bl_str = (g_backlight_level == 255) ? "LCD: 100%" :
-			                     (g_backlight_level == 140) ? "LCD: 50%" :
-			                     (g_backlight_level == 50)  ? "LCD: 20%" : "LCD: OFF";
-			snprintf(g_osd_text, sizeof(g_osd_text), "%s", bl_str);
-			g_osd_color = HIFI_GOLD;
-			g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1500);
-			if (display) {
-				if (g_backlight_level == 0) {
-					GDS_DisplayOff(display);
-				} else {
-					GDS_DisplayOn(display);
-					GDS_SetContrast(display, g_backlight_level);
-				}
-			}
-			g_tactile_r = 120; g_tactile_g = 80; g_tactile_b = 0;
-			g_tactile_led_expire = xTaskGetTickCount() + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		}
-		return true; /* Handled completely by display! */
-	}
-	
-	return false;
-}
-
 extern const uint8_t default_artwork[]   asm("_binary_note_jpg_start");
 extern bool is_recovery_running;
 
@@ -227,6 +86,184 @@ static EXT_RAM_ATTR struct {
 	TickType_t tick;
 	TickType_t progress_tick;
 } displayer;
+
+/* =========================================================================
+ * PERFECT 4-BUTTON MEDIA CONTROLLER & TACTILE OSD / DISPLAY STATE
+ * K1 (GPIO 13): Click = Prev Track, Hold = Volume Down
+ * K2 (GPIO 14): Click = Next Track, Hold = Volume Up
+ * K3 (GPIO 15): Click = Play / Pause, Hold = Seek Rewind (-10s)
+ * K4 (GPIO 16): Click = Brightness (100%->60%->30%), Dbl-click = Sleep, Hold = Seek Forward (+10s)
+ * Wake on ANY button when sleeping!
+ * ========================================================================= */
+typedef enum {
+	LED_MODE_BEAT = 0,     /* Default: Live audio beat visualizer */
+	LED_MODE_RAINBOW = 1,  /* Smooth rainbow color cycle */
+	LED_MODE_STATIC = 2,   /* Soft warm amber glow */
+	LED_MODE_OFF = 3       /* Completely off */
+} led_mode_t;
+
+static volatile led_mode_t g_led_mode = LED_MODE_BEAT;
+static volatile uint8_t g_backlight_level = 255; /* 255 (100%), 160 (60%), 80 (30%) */
+static volatile bool g_display_sleep_forced = false;
+static volatile TickType_t g_last_user_activity = 0;
+
+/* On-Screen Display (OSD) feedback overlay */
+static char g_osd_text[32] = "";
+static TickType_t g_osd_expire_tick = 0;
+static uint16_t g_osd_color = HIFI_CYAN;
+static TickType_t g_tactile_led_expire = 0;
+static uint8_t g_tactile_r = 0, g_tactile_g = 0, g_tactile_b = 0;
+
+bool display_button_hook(int gpio, actrls_action_e action, button_event_e event, button_press_e press, bool long_press) {
+	if (event != BUTTON_PRESSED) return false;
+	
+	TickType_t now = xTaskGetTickCount();
+	g_last_user_activity = now;
+	ESP_LOGI(TAG, "BUTTON EVENT: GPIO=%d, action=%d, long=%d", gpio, action, (int)long_press);
+	
+	/* 1. Wake screen if it was sleeping or dimmed */
+	if (g_display_sleep_forced) {
+		g_display_sleep_forced = false;
+		if (display) {
+			GDS_DisplayOn(display);
+			GDS_SetContrast(display, g_backlight_level);
+		}
+		snprintf(g_osd_text, sizeof(g_osd_text), "WAKE");
+		g_osd_color = HIFI_EMERALD;
+		g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
+		if (led_display) led_vu_color_all(0, 100, 40);
+		return true; /* Woke up device, don't execute action on wake button press */
+	}
+	
+	/* 2. Process according to User's Standardized Layout: */
+	switch (gpio) {
+	case 13: /* K1 - Prev Track (Click) / Volume Down (Hold) */
+		if (long_press) {
+			/* Vol Down */
+			snprintf(g_osd_text, sizeof(g_osd_text), "VOL -");
+			g_osd_color = HIFI_CYAN;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
+			g_tactile_r = 0; g_tactile_g = 60; g_tactile_b = 100;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+		} else {
+			/* Prev */
+			snprintf(g_osd_text, sizeof(g_osd_text), "|<< PREV");
+			g_osd_color = HIFI_CYAN;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
+			g_tactile_r = 0; g_tactile_g = 40; g_tactile_b = 120;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+		}
+		return false; /* Pass to audio_controls to trigger ACTRLS_PREV / ACTRLS_VOLDOWN */
+		
+	case 14: /* K2 - Next Track (Click) / Volume Up (Hold) */
+		if (long_press) {
+			/* Vol Up */
+			snprintf(g_osd_text, sizeof(g_osd_text), "VOL +");
+			g_osd_color = HIFI_VIOLET;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
+			g_tactile_r = 80; g_tactile_g = 0; g_tactile_b = 120;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+		} else {
+			/* Next */
+			snprintf(g_osd_text, sizeof(g_osd_text), "NEXT >>|");
+			g_osd_color = HIFI_VIOLET;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
+			g_tactile_r = 100; g_tactile_g = 0; g_tactile_b = 80;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+		}
+		return false; /* Pass to audio_controls to trigger ACTRLS_NEXT / ACTRLS_VOLUP */
+		
+	case 15: /* K3 - Play/Pause (Click) / Seek Rewind -10s (Hold) */
+		if (long_press) {
+			/* Seek Rewind (-10s) */
+			snprintf(g_osd_text, sizeof(g_osd_text), "<< -10s");
+			g_osd_color = HIFI_GOLD;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
+			g_tactile_r = 100; g_tactile_g = 60; g_tactile_b = 0;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+			/* Shift display timeline scrubber back 10s */
+			if (displayer.elapsed > 10) displayer.elapsed -= 10;
+			else displayer.elapsed = 0;
+		} else {
+			/* Play / Pause Toggle */
+			bool is_currently_playing = (displayer.state == DISPLAYER_ACTIVE && (displayer.timer || g_audio_peak_level > 1));
+			if (is_currently_playing) {
+				snprintf(g_osd_text, sizeof(g_osd_text), "|| PAUSE");
+				g_osd_color = HIFI_GOLD;
+			} else {
+				snprintf(g_osd_text, sizeof(g_osd_text), "> PLAY");
+				g_osd_color = HIFI_EMERALD;
+			}
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
+			g_tactile_r = 0; g_tactile_g = 120; g_tactile_b = 30;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+		}
+		return false; /* Pass to audio_controls to trigger ACTRLS_TOGGLE / ACTRLS_REW */
+		
+	case 16: /* K4 - Brightness / Sleep (Click) / Seek Forward +10s (Hold) */
+		if (long_press) {
+			/* Seek Forward (+10s) */
+			snprintf(g_osd_text, sizeof(g_osd_text), ">> +10s");
+			g_osd_color = HIFI_GOLD;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
+			g_tactile_r = 100; g_tactile_g = 60; g_tactile_b = 0;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+			/* Shift display timeline scrubber forward 10s */
+			displayer.elapsed += 10;
+			if (displayer.duration.value > 0 && displayer.elapsed > displayer.duration.value) {
+				displayer.elapsed = displayer.duration.value;
+			}
+			return false; /* Pass to audio_controls to trigger ACTRLS_FWD */
+		} else {
+			/* Short click: Double click detection for SLEEP, single click for Brightness */
+			static TickType_t s_last_k4_click = 0;
+			if (now - s_last_k4_click < pdMS_TO_TICKS(450)) {
+				/* Double click: Enter SLEEP mode */
+				g_display_sleep_forced = true;
+				snprintf(g_osd_text, sizeof(g_osd_text), "SLEEP");
+				g_osd_color = HIFI_ROSE;
+				g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
+				if (led_display) led_vu_color_all(80, 0, 0);
+				if (display) {
+					GDS_SetContrast(display, 0);
+					GDS_DisplayOff(display);
+				}
+				s_last_k4_click = 0;
+				return true;
+			}
+			s_last_k4_click = now;
+			
+			/* Single click: Cycle Brightness 100% -> 60% -> 30% -> 100% (NEVER black) */
+			if (g_backlight_level == 255) g_backlight_level = 160;      /* 60% */
+			else if (g_backlight_level == 160) g_backlight_level = 80;  /* 30% */
+			else g_backlight_level = 255;                               /* 100% */
+			
+			if (display) {
+				GDS_DisplayOn(display);
+				GDS_SetContrast(display, g_backlight_level);
+			}
+			
+			const char *bl_str = (g_backlight_level == 255) ? "LCD: 100%" :
+			                     (g_backlight_level == 160) ? "LCD: 60%" : "LCD: 30%";
+			snprintf(g_osd_text, sizeof(g_osd_text), "%s", bl_str);
+			g_osd_color = HIFI_GOLD;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
+			g_tactile_r = 100; g_tactile_g = 70; g_tactile_b = 0;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+			return true; /* Handled completely by display! */
+		}
+	}
+	
+	return false;
+}
 
 static const char *known_drivers[] = {"SH1106",
         "SH1122",

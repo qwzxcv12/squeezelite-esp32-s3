@@ -82,12 +82,24 @@ static void raop_next(bool pressed) {
 	LOG_INFO("AirPlay next");
 }
 
+static void raop_rew(bool pressed) {
+	if (!pressed) return;
+	raop_cmd(raop, RAOP_REW, NULL);
+	LOG_INFO("AirPlay rewind");
+}
+
+static void raop_fwd(bool pressed) {
+	if (!pressed) return;
+	raop_cmd(raop, RAOP_FWD, NULL);
+	LOG_INFO("AirPlay forward");
+}
+
 const static actrls_t controls = {
 	NULL,								// power
 	raop_volume_up, raop_volume_down,	// volume up, volume down
 	raop_toggle, raop_play,				// toggle, play
 	raop_pause, raop_stop,				// pause, stop
-	NULL, NULL,							// rew, fwd
+	raop_rew, raop_fwd,					// rew, fwd
 	raop_prev, raop_next,				// prev, next
 	NULL, NULL, NULL, NULL, // left, right, up, down
 	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // pre1-10
