@@ -160,31 +160,7 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 	
 	/* 2. Process according to User's Standardized Layout: */
 	switch (gpio) {
-	case 13: /* K1 - Prev Track (Click) / Volume Down (Hold) */
-		if (long_press) {
-			/* Vol Down (Continuous Hold Auto-Repeat) */
-			if (g_system_volume_pct > 0) {
-				if (g_system_volume_pct >= 5) g_system_volume_pct -= 5;
-				else g_system_volume_pct = 0;
-			}
-			snprintf(g_osd_text, sizeof(g_osd_text), "VOL: %d%%", g_system_volume_pct);
-			g_osd_color = HIFI_CYAN;
-			g_osd_expire_tick = now + pdMS_TO_TICKS(1500);
-			g_tactile_r = 0; g_tactile_g = 60; g_tactile_b = 100;
-			g_tactile_led_expire = now + pdMS_TO_TICKS(140);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		} else {
-			/* Prev */
-			snprintf(g_osd_text, sizeof(g_osd_text), "|<< PREV");
-			g_osd_color = HIFI_CYAN;
-			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
-			g_tactile_r = 0; g_tactile_g = 40; g_tactile_b = 120;
-			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		}
-		return false; /* Pass to audio_controls to trigger ACTRLS_PREV / ACTRLS_VOLDOWN */
-		
-	case 14: /* K2 - Next Track (Click) / Volume Up (Hold) */
+	case 13: /* K1 - Next Track (Click) / Volume Up (Hold) */
 		if (long_press) {
 			/* Vol Up (Continuous Hold Auto-Repeat) */
 			if (g_system_volume_pct < 100) {
@@ -207,6 +183,30 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		}
 		return false; /* Pass to audio_controls to trigger ACTRLS_NEXT / ACTRLS_VOLUP */
+		
+	case 14: /* K2 - Prev Track (Click) / Volume Down (Hold) */
+		if (long_press) {
+			/* Vol Down (Continuous Hold Auto-Repeat) */
+			if (g_system_volume_pct > 0) {
+				if (g_system_volume_pct >= 5) g_system_volume_pct -= 5;
+				else g_system_volume_pct = 0;
+			}
+			snprintf(g_osd_text, sizeof(g_osd_text), "VOL: %d%%", g_system_volume_pct);
+			g_osd_color = HIFI_CYAN;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1500);
+			g_tactile_r = 0; g_tactile_g = 60; g_tactile_b = 100;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(140);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+		} else {
+			/* Prev */
+			snprintf(g_osd_text, sizeof(g_osd_text), "|<< PREV");
+			g_osd_color = HIFI_CYAN;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
+			g_tactile_r = 0; g_tactile_g = 40; g_tactile_b = 120;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+		}
+		return false; /* Pass to audio_controls to trigger ACTRLS_PREV / ACTRLS_VOLDOWN */
 		
 	case 15: /* K3 - Play/Pause (Click) / Mute/Unmute (Hold) */
 		if (long_press) {
