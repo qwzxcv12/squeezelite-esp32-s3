@@ -83,6 +83,7 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 	if (event != BUTTON_PRESSED) return false;
 	
 	g_last_user_activity = xTaskGetTickCount();
+	ESP_LOGI(TAG, "BUTTON PRESSED: GPIO=%d, action=%d, long=%d", gpio, action, (int)long_press);
 	
 	/* 1. Wake screen if it was sleeping or dimmed */
 	if (g_display_sleep_forced && gpio != 14 && gpio != 16) {
@@ -487,32 +488,23 @@ static void displayer_task(void *args) {
 				continue;
 			}
 
-			if (is_active || g_audio_peak_level > 2) {
-				last_active_tick = now_tick;
+			bool user_active = (is_active || g_audio_peak_level > 2 || (now_tick - last_active_tick) < pdMS_TO_TICKS(60000));
+
+			if (user_active) {
 				if (pwr_state != 0 && g_backlight_level > 0) {
 					if (pwr_state == 2) {
 						GDS_DisplayOn(display);
 					}
 					GDS_SetContrast(display, g_backlight_level);
 					pwr_state = 0;
-					ESP_LOGI(TAG, "Power Manager: Display Woke to Active Mode (%d Backlight, 20 FPS)", (int)g_backlight_level);
+					ESP_LOGI(TAG, "Power Manager: Display Active (Backlight %d, 20 FPS)", (int)g_backlight_level);
 				}
 			} else {
-				uint32_t idle_sec = (now_tick - last_active_tick) * portTICK_PERIOD_MS / 1000;
-				if (idle_sec >= 120) {
-					if (pwr_state != 2) {
-						GDS_SetContrast(display, 0);
-						GDS_DisplayOff(display);
-						pwr_state = 2;
-						if (led_display) led_vu_color_all(0, 0, 0);
-						ESP_LOGI(TAG, "Power Manager: Display Standby Off (0%% Backlight, ST7735 Sleep)");
-					}
-					vTaskDelay(pdMS_TO_TICKS(300));
-					continue;
-				} else if (idle_sec >= 30 && pwr_state == 0) {
+				/* After 60s idle with no music: gently dim to 40% (Eco Dim) - NEVER turn black */
+				if (pwr_state == 0 && g_backlight_level > 0) {
 					GDS_SetContrast(display, min(g_backlight_level, (uint8_t)140));
 					pwr_state = 1;
-					ESP_LOGI(TAG, "Power Manager: Eco Dim Mode (25%% Backlight, 2 FPS)");
+					ESP_LOGI(TAG, "Power Manager: Eco Dim Mode (40%% Backlight, 2 FPS)");
 				}
 			}
 
