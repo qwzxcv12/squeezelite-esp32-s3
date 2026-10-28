@@ -415,7 +415,7 @@ static void hifi_draw_album_box(const uint8_t *jpeg_data) {
 }
 void display_init(char *welcome) {
 	bool init = false;
-	char *config = config_alloc_get_str("display_config", CONFIG_DISPLAY_CONFIG, "N/A");
+	char *config = config_alloc_get_str("display_config", NULL, CONFIG_DISPLAY_CONFIG);
 	
 	int width = -1, height = -1, backlight_pin = -1;
 	char *drivername = strstr(config, "driver");

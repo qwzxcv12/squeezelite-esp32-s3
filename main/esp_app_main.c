@@ -319,7 +319,7 @@ void register_default_nvs(){
 		FREE_AND_NULL(spi_cfg);
 		char *disp_cfg = (char *)config_alloc_get(NVS_TYPE_STR, "display_config");
 		if (!disp_cfg || !strstr(disp_cfg, "ST7735") || !strstr(disp_cfg, "cswap")) {
-			config_set_value(NVS_TYPE_STR, "display_config", "SPI,width=160,height=128,cs=11,back=12,reset=9,speed=27000000,driver=ST7735,rotate,HFlip,cswap");
+			config_set_value(NVS_TYPE_STR, "display_config", CONFIG_DISPLAY_CONFIG);
 		}
 		FREE_AND_NULL(disp_cfg);
 		char *meta_cfg = (char *)config_alloc_get(NVS_TYPE_STR, "metadata_config");
