@@ -253,7 +253,8 @@ static bool raop_sink_cmd_handler(raop_event_t event, va_list args)
 			error = raop_sync.sum / min(raop_sync.count, raop_sync.win);
 
 			// wait till we have enough data or there is a strong deviation
-			if ((raop_sync.count >= raop_sync.win && abs(error) > 120) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 350)) {
+			// Frame skipping/pausing is disabled on standalone I2S DAC to eliminate audible micro-stutters (e.g. 7320 frames drop)
+			if (0 && ((raop_sync.count >= raop_sync.win && abs(error) > 120) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 350))) {
 				if (error < 0) {
 					output.skip_frames = -(error * RAOP_SAMPLE_RATE) / 1000;
 					output.state = OUTPUT_SKIP_FRAMES;					
@@ -301,7 +302,7 @@ static bool raop_sink_cmd_handler(raop_event_t event, va_list args)
 			raop_sync.win = 1;
 			raop_sync.sum = raop_sync.count = 0;
 			memset(raop_sync.errors, 0, sizeof(raop_sync.errors));
-			raop_sync.enabled = !strcasestr(output.device, "BT");
+			raop_sync.enabled = false; /* Disable aggressive frame skipping to eliminate periodic audio hitching */
 			output.next_sample_rate = output.current_sample_rate = RAOP_SAMPLE_RATE;
 			break;
         case RAOP_STALLED:
