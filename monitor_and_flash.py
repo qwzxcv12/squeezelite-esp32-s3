@@ -34,7 +34,11 @@ def main():
         "User-Agent": "ESP32-Builder-Agent"
     }
 
-    print(">>> Locating latest GitHub Actions run for commit d18e02cd...")
+    try:
+        target_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=os.path.dirname(__file__)).decode().strip()[:7]
+    except Exception:
+        target_sha = ''
+    print(f'>>> Locating latest GitHub Actions run for commit {target_sha}...')
     run_id = None
     for attempt in range(15):
         try:
@@ -43,7 +47,7 @@ def main():
                 data = json.loads(resp.read().decode())
                 runs = data.get("workflow_runs", [])
                 for r in runs:
-                    if r.get("head_sha", "").startswith("d18e02c"):
+                    if not target_sha or r.get('head_sha', '').startswith(target_sha):
                         run_id = r["id"]
                         print(f"Found Run ID: {run_id} ({r.get('name')}) - Status: {r.get('status')}")
                         break
@@ -161,7 +165,7 @@ def main():
 
     import telnetlib
     try:
-        tn = telnetlib.Telnet("192.168.1.19", 23, timeout=5)
+        tn = telnetlib.Telnet("192.168.1.52", 23, timeout=5)
         time.sleep(1)
         tn.write(b"\n")
         out = tn.read_very_eager().decode('utf-8', errors='replace')

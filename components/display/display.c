@@ -394,37 +394,37 @@ static void hifi_draw_album_box(const uint8_t *jpeg_data) {
 	bool is_portrait = (GDS_GetWidth(display) < GDS_GetHeight(display));
 
 	if (is_portrait) {
-		/* Full-width Turntable Deck Card in Portrait: X: 4..123, Y: 26..98 (W:120, H:73) */
-		GDS_ClearWindow(display, 0, 26, 127, 98, HIFI_BG);
-		hifi_fill_round_rect(4, 26, 120, 73, HIFI_CARD, HIFI_PILL);
+		/* Full-width Turntable Deck Card in Portrait: X: 4..123, Y: 20..81 (W:120, H:62) */
+		GDS_ClearWindow(display, 0, 20, 127, 81, HIFI_BG);
+		hifi_fill_round_rect(4, 20, 120, 62, HIFI_CARD, HIFI_PILL);
 
 		if (jpeg_data && jpeg_data != default_artwork) {
 			g_has_custom_artwork = true;
 			uint16_t orig_h = display->Height;
-			display->Height = 97;
-			GDS_DrawJPEG(display, (uint8_t*)jpeg_data, 29, 28, GDS_IMAGE_CENTER | GDS_IMAGE_FIT);
+			display->Height = 80;
+			GDS_DrawJPEG(display, (uint8_t*)jpeg_data, 34, 22, GDS_IMAGE_CENTER | GDS_IMAGE_FIT);
 			display->Height = orig_h;
-			GDS_DrawBox(display, 28, 27, 98, 97, HIFI_PILL, false);
+			GDS_DrawBox(display, 33, 21, 92, 80, HIFI_PILL, false);
 		} else {
 			g_has_custom_artwork = false;
 			/* Strobe dots on left */
 			for (int s = 0; s < 4; s++) {
-				int sy = 46 + s * 8;
+				int sy = 37 + s * 7;
 				GDS_DrawBox(display, 13, sy, 15, sy + 2, HIFI_TRACK, true);
 			}
 			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-			GDS_FontDrawString(display, 9, 80, "33", HIFI_SLATE);
+			GDS_FontDrawString(display, 9, 68, "33", HIFI_SLATE);
 
-			/* Centered Large Vinyl Disc (Radius 32, cx 64, cy 62) */
-			hifi_draw_vinyl_disc(64, 62, 32, 0, false);
+			/* Centered Large Vinyl Disc (Radius 27, cx 64, cy 51) */
+			hifi_draw_vinyl_disc(64, 51, 27, 0, false);
 
 			/* Tonearm on right parked */
-			GDS_DrawBox(display, 111, 34, 115, 38, HIFI_PILL, true);
-			GDS_DrawPixelFast(display, 113, 36, HIFI_WHITE);
-			GDS_DrawVLine(display, 113, 30, 4, HIFI_SLATE);
-			GDS_DrawVLine(display, 113, 36, 24, HIFI_PILL);
-			GDS_DrawBox(display, 112, 60, 114, 63, HIFI_GOLD, true);
-			GDS_DrawHLine(display, 110, 52, 6, HIFI_SLATE);
+			GDS_DrawBox(display, 111, 28, 115, 32, HIFI_PILL, true);
+			GDS_DrawPixelFast(display, 113, 30, HIFI_WHITE);
+			GDS_DrawVLine(display, 113, 24, 4, HIFI_SLATE);
+			GDS_DrawVLine(display, 113, 30, 20, HIFI_PILL);
+			GDS_DrawBox(display, 112, 50, 114, 53, HIFI_GOLD, true);
+			GDS_DrawHLine(display, 110, 42, 6, HIFI_SLATE);
 		}
 	} else {
 		/* Right Deck Box in Landscape: X: 102..155, Y: 49..107 */
@@ -568,8 +568,8 @@ static void displayer_task(void *args) {
 	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) < GDS_GetHeight(display)) {
 		int marquee_x = 0;
 		int anim_tick = 0;
-		int bar_segs[14]  = {2, 3, 5, 4, 6, 7, 5, 4, 6, 5, 4, 3, 2, 2};
-		int bar_peaks[14] = {3, 4, 6, 5, 7, 8, 6, 5, 7, 6, 5, 4, 3, 3};
+		int bar_segs[14]  = {3, 5, 8, 7, 10, 12, 9, 8, 11, 9, 7, 5, 4, 3};
+		int bar_peaks[14] = {4, 6, 9, 8, 11, 13, 10, 9, 12, 10, 8, 6, 5, 4};
 		char last_track[SCROLLABLE_SIZE + 1] = "";
 		bool artwork_initialized = false;
 		TickType_t last_active_tick = xTaskGetTickCount();
@@ -680,30 +680,30 @@ static void displayer_task(void *args) {
 
 			/* Clear background around cards */
 			GDS_ClearWindow(display, 0, 0, 127, 1, HIFI_BG);
-			GDS_ClearWindow(display, 0, 2, 3, 23, HIFI_BG);
-			GDS_ClearWindow(display, 124, 2, 127, 23, HIFI_BG);
-			GDS_ClearWindow(display, 0, 24, 127, 25, HIFI_BG);
-			GDS_ClearWindow(display, 0, 26, 3, 98, HIFI_BG);
-			GDS_ClearWindow(display, 124, 26, 127, 98, HIFI_BG);
-			GDS_ClearWindow(display, 0, 99, 127, 100, HIFI_BG);
-			GDS_ClearWindow(display, 0, 101, 3, 125, HIFI_BG);
-			GDS_ClearWindow(display, 124, 101, 127, 125, HIFI_BG);
-			GDS_ClearWindow(display, 0, 126, 127, 127, HIFI_BG);
-			GDS_ClearWindow(display, 0, 128, 3, 158, HIFI_BG);
-			GDS_ClearWindow(display, 124, 128, 127, 158, HIFI_BG);
+			GDS_ClearWindow(display, 0, 2, 3, 18, HIFI_BG);
+			GDS_ClearWindow(display, 124, 2, 127, 18, HIFI_BG);
+			GDS_ClearWindow(display, 0, 19, 127, 19, HIFI_BG);
+			GDS_ClearWindow(display, 0, 20, 3, 81, HIFI_BG);
+			GDS_ClearWindow(display, 124, 20, 127, 81, HIFI_BG);
+			GDS_ClearWindow(display, 0, 82, 127, 82, HIFI_BG);
+			GDS_ClearWindow(display, 0, 83, 3, 103, HIFI_BG);
+			GDS_ClearWindow(display, 124, 83, 127, 103, HIFI_BG);
+			GDS_ClearWindow(display, 0, 104, 127, 104, HIFI_BG);
+			GDS_ClearWindow(display, 0, 105, 3, 158, HIFI_BG);
+			GDS_ClearWindow(display, 124, 105, 127, 158, HIFI_BG);
 			GDS_ClearWindow(display, 0, 159, 127, 159, HIFI_BG);
 
 			/* -------------------------------------------------------------
-			 * ZONE 1: HEADER & TIMELINE SCRUBBER (X:4..123, Y:2..23)
+			 * ZONE 1: HEADER & TIMELINE SCRUBBER (X:4..123, Y:2..18)
 			 * ------------------------------------------------------------- */
-			hifi_fill_round_rect(4, 2, 120, 22, HIFI_CARD, HIFI_PILL);
+			hifi_fill_round_rect(4, 2, 120, 17, HIFI_CARD, HIFI_PILL);
 
 			/* Row 1: Status Dot + Source Badge (AIRPLAY) + Time (01:23 / 03:45) */
 			uint16_t dot_col = is_active ? ((anim_tick & 8) ? HIFI_EMERALD : HIFI_CYAN) : HIFI_CYAN;
-			GDS_DrawBox(display, 8, 8, 11, 11, dot_col, true);
+			GDS_DrawBox(display, 8, 6, 11, 9, dot_col, true);
 
 			GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
-			GDS_FontDrawString(display, 15, 4, header_buf, HIFI_WHITE);
+			GDS_FontDrawString(display, 15, 3, header_buf, HIFI_WHITE);
 
 			if (is_active && cur_duration > 0 && cur_duration < 3600) {
 				snprintf(time_buf, sizeof(time_buf), "%u:%02u/%u:%02u",
@@ -718,26 +718,26 @@ static void displayer_task(void *args) {
 			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
 			int timew = GDS_FontMeasureString(display, time_buf);
 			uint16_t time_col = (strcmp(time_buf, "32-BIT") == 0) ? HIFI_GOLD : HIFI_CYAN;
-			GDS_FontDrawString(display, max(58, 120 - timew), 4, time_buf, time_col);
+			GDS_FontDrawString(display, max(58, 120 - timew), 3, time_buf, time_col);
 
-			/* Row 2: Scrubber timeline bar at Y: 19..20 (Width 112px, X: 8..119) */
-			GDS_DrawHLine(display, 8, 19, 112, HIFI_TRACK);
-			GDS_DrawHLine(display, 8, 20, 112, HIFI_TRACK);
+			/* Row 2: Scrubber timeline bar at Y: 15..16 (Width 112px, X: 8..119) */
+			GDS_DrawHLine(display, 8, 15, 112, HIFI_TRACK);
+			GDS_DrawHLine(display, 8, 16, 112, HIFI_TRACK);
 			if (is_active && cur_duration > 0) {
 				int fill_w = (int)((cur_elapsed * 112) / cur_duration);
 				if (fill_w > 112) fill_w = 112;
 				if (fill_w > 0) {
-					GDS_DrawHLine(display, 8, 19, fill_w, HIFI_CYAN);
-					GDS_DrawHLine(display, 8, 20, fill_w, HIFI_CYAN);
+					GDS_DrawHLine(display, 8, 15, fill_w, HIFI_CYAN);
+					GDS_DrawHLine(display, 8, 16, fill_w, HIFI_CYAN);
 				}
 			} else if (is_active && is_playing) {
 				int pulse_x = 8 + ((anim_tick * 4) % 96);
-				GDS_DrawHLine(display, pulse_x, 19, 16, HIFI_CYAN);
-				GDS_DrawHLine(display, pulse_x, 20, 16, HIFI_CYAN);
+				GDS_DrawHLine(display, pulse_x, 15, 16, HIFI_CYAN);
+				GDS_DrawHLine(display, pulse_x, 16, 16, HIFI_CYAN);
 			}
 
 			/* -------------------------------------------------------------
-			 * ZONE 2: TURNTABLE DECK & VINYL RECORD (X:4..123, Y:26..98)
+			 * ZONE 2: TURNTABLE DECK & VINYL RECORD (X:4..123, Y:20..81)
 			 * ------------------------------------------------------------- */
 			uint8_t peak = g_audio_peak_level;
 			bool record_spinning = is_active && (is_playing || peak > 2);
@@ -745,45 +745,45 @@ static void displayer_task(void *args) {
 			if (!g_has_custom_artwork) {
 				/* Strobe markings on left */
 				for (int s = 0; s < 4; s++) {
-					int sy = 46 + s * 8;
+					int sy = 37 + s * 7;
 					uint16_t sc = (record_spinning && ((anim_tick + s) & 2)) ? HIFI_CYAN : HIFI_TRACK;
 					GDS_DrawBox(display, 13, sy, 15, sy + 2, sc, true);
 				}
 				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-				GDS_FontDrawString(display, 9, 80, "33", is_active ? HIFI_EMERALD : HIFI_SLATE);
+				GDS_FontDrawString(display, 9, 68, "33", is_active ? HIFI_EMERALD : HIFI_SLATE);
 
-				/* Large Centered Vinyl Disc (Radius 32, cx 64, cy 62) */
-				hifi_draw_vinyl_disc(64, 62, 32, anim_tick, record_spinning);
+				/* Large Centered Vinyl Disc (Radius 27, cx 64, cy 51) */
+				hifi_draw_vinyl_disc(64, 51, 27, anim_tick, record_spinning);
 
 				/* Tonearm Assembly on right */
-				GDS_DrawBox(display, 111, 34, 115, 38, HIFI_PILL, true);
-				GDS_DrawPixelFast(display, 113, 36, HIFI_WHITE);
-				GDS_DrawVLine(display, 113, 30, 4, HIFI_SLATE); /* Counterweight */
+				GDS_DrawBox(display, 111, 28, 115, 32, HIFI_PILL, true);
+				GDS_DrawPixelFast(display, 113, 30, HIFI_WHITE);
+				GDS_DrawVLine(display, 113, 24, 4, HIFI_SLATE); /* Counterweight */
 
 				if (record_spinning) {
 					/* Tonearm playing on record */
-					GDS_DrawLine(display, 113, 36, 105, 48, HIFI_PILL);
-					GDS_DrawLine(display, 105, 48, 93, 56, HIFI_PILL);
-					GDS_DrawLine(display, 93, 56, 86, 62, HIFI_WHITE);
-					GDS_DrawBox(display, 84, 61, 86, 63, HIFI_GOLD, true); /* Cartridge */
+					GDS_DrawLine(display, 113, 30, 105, 40, HIFI_PILL);
+					GDS_DrawLine(display, 105, 40, 93, 46, HIFI_PILL);
+					GDS_DrawLine(display, 93, 46, 85, 51, HIFI_WHITE);
+					GDS_DrawBox(display, 83, 50, 85, 52, HIFI_GOLD, true); /* Cartridge */
 				} else {
 					/* Tonearm parked on rest */
-					GDS_DrawVLine(display, 113, 36, 24, HIFI_PILL);
-					GDS_DrawBox(display, 112, 60, 114, 63, HIFI_GOLD, true);
-					GDS_DrawHLine(display, 110, 52, 6, HIFI_SLATE);
+					GDS_DrawVLine(display, 113, 30, 20, HIFI_PILL);
+					GDS_DrawBox(display, 112, 50, 114, 53, HIFI_GOLD, true);
+					GDS_DrawHLine(display, 110, 42, 6, HIFI_SLATE);
 				}
 			}
 
 			/* -------------------------------------------------------------
-			 * ZONE 3: TRACK MARQUEE / POPUP OSD (X:4..123, Y:101..125)
+			 * ZONE 3: TRACK MARQUEE / POPUP OSD (X:4..123, Y:83..103)
 			 * ------------------------------------------------------------- */
 			bool show_osd = (xTaskGetTickCount() < g_osd_expire_tick && g_osd_text[0] != '\0');
 			if (show_osd) {
-				hifi_fill_round_rect(4, 101, 120, 25, HIFI_CARD, g_osd_color);
+				hifi_fill_round_rect(4, 83, 120, 21, HIFI_CARD, g_osd_color);
 				GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
 				int otw = GDS_FontMeasureString(display, g_osd_text);
 				int ox = max(8, 64 - otw / 2);
-				int oy = (strncmp(g_osd_text, "VOL", 3) == 0) ? 103 : 107;
+				int oy = (strncmp(g_osd_text, "VOL", 3) == 0) ? 84 : 87;
 				GDS_FontDrawString(display, ox, oy, g_osd_text, g_osd_color);
 
 				if (strncmp(g_osd_text, "VOL", 3) == 0) {
@@ -791,65 +791,57 @@ static void displayer_task(void *args) {
 					int bar_w = 100;
 					int fill_w = (bar_w * g_system_volume_pct) / 100;
 					if (fill_w > bar_w) fill_w = bar_w;
-					GDS_DrawHLine(display, bar_x, 118, bar_w, HIFI_TRACK);
-					GDS_DrawHLine(display, bar_x, 119, bar_w, HIFI_TRACK);
+					GDS_DrawHLine(display, bar_x, 99, bar_w, HIFI_TRACK);
+					GDS_DrawHLine(display, bar_x, 100, bar_w, HIFI_TRACK);
 					if (fill_w > 0) {
-						GDS_DrawHLine(display, bar_x, 118, fill_w, g_osd_color);
-						GDS_DrawHLine(display, bar_x, 119, fill_w, g_osd_color);
+						GDS_DrawHLine(display, bar_x, 99, fill_w, g_osd_color);
+						GDS_DrawHLine(display, bar_x, 100, fill_w, g_osd_color);
 					}
 				}
 			} else {
-				hifi_fill_round_rect(4, 101, 120, 25, HIFI_CARD, HIFI_PILL);
+				hifi_fill_round_rect(4, 83, 120, 21, HIFI_CARD, HIFI_PILL);
 				GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
 				int text_w = GDS_FontMeasureString(display, track_buf);
 				if (text_w < 112) text_w = 112;
 
 				int text_color = is_active ? HIFI_WHITE : HIFI_CYAN;
 				GDS_SetTextWidth(display, 119);
-				GDS_FontDrawString(display, 8 - marquee_x, 107, track_buf, text_color);
+				GDS_FontDrawString(display, 8 - marquee_x, 87, track_buf, text_color);
 				if (8 + text_w - marquee_x < 119) {
-					GDS_FontDrawString(display, 8 + text_w - marquee_x, 107, track_buf, text_color);
+					GDS_FontDrawString(display, 8 + text_w - marquee_x, 87, track_buf, text_color);
 				}
 				GDS_SetTextWidth(display, 128);
 
 				/* Clip edges */
-				GDS_ClearWindow(display, 0, 101, 3, 125, HIFI_BG);
-				GDS_ClearWindow(display, 124, 101, 127, 125, HIFI_BG);
+				GDS_ClearWindow(display, 0, 83, 3, 103, HIFI_BG);
+				GDS_ClearWindow(display, 124, 83, 127, 103, HIFI_BG);
 				marquee_x = (marquee_x + 2) % text_w;
 			}
 
 			/* -------------------------------------------------------------
-			 * ZONE 4: 14-BAND EQUALIZER SPECTRUM (X:4..123, Y:128..158)
+			 * ZONE 4: TALL 14-BAND EQUALIZER SPECTRUM (X:4..123, Y:105..158, H:54)
+			 * (No subtitle text - Full 54px dedicated to 14 high-density LED bars!)
 			 * ------------------------------------------------------------- */
-			hifi_fill_round_rect(4, 128, 120, 31, HIFI_CARD, HIFI_PILL);
+			hifi_fill_round_rect(4, 105, 120, 54, HIFI_CARD, HIFI_PILL);
 
-			/* Micro header */
-			uint16_t ico_col = is_active ? HIFI_EMERALD : HIFI_VIOLET;
-			GDS_DrawVLine(display, 9, 131, 6, ico_col);
-			GDS_DrawVLine(display, 10, 132, 4, ico_col);
-			GDS_DrawVLine(display, 11, 133, 2, ico_col);
-
-			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-			GDS_FontDrawString(display, 16, 129, is_active ? "44.1kHz PCM" : "DAC READY", HIFI_SLATE);
-
-			/* 14 spectrum bars */
+			/* 14 spectrum bars (6px width, 14 LED levels each, 5 gradient color tiers!) */
 			for (int i = 0; i < 14; i++) {
 				int target = 1;
 				if (is_active && peak > 2) {
 					int dist = (i < 6) ? (6 - i) : (i - 6);
-					int weight = 105 - dist * 9;
+					int weight = 125 - dist * 10;
 					int jitter = ((anim_tick * 5 + i * 17) % 5) - 2;
-					target = ((int)peak * weight) / 1000 + jitter;
+					target = ((int)peak * weight * 14) / 8000 + jitter;
 				} else if (is_playing) {
-					target = 2 + ((anim_tick * 2 + i * 7) % 5);
+					target = 3 + ((anim_tick * 2 + i * 7) % 9);
 				} else {
-					int wave = ((anim_tick + i * 2) % 14);
-					if (wave > 7) wave = 14 - wave;
-					target = 1 + (wave / 3);
+					int wave = ((anim_tick + i * 2) % 20);
+					if (wave > 10) wave = 20 - wave;
+					target = 2 + (wave / 3);
 				}
 
 				if (target < 1) target = 1;
-				if (target > 7) target = 7;
+				if (target > 14) target = 14;
 
 				if (target > bar_segs[i]) {
 					bar_segs[i] = (bar_segs[i] + target * 2) / 3;
@@ -864,17 +856,18 @@ static void displayer_task(void *args) {
 					bar_peaks[i]--;
 				}
 
-				int bx = 8 + i * 8; /* 14 bars * 8px = 112px */
-				for (int s = 0; s < 7; s++) {
-					int sy = 155 - s * 3;
+				int bx = 8 + i * 8; /* 14 bars * 8px = 112px (X: 8..119) */
+				for (int s = 0; s < 14; s++) {
+					int sy = 154 - s * 3; /* Levels 0..13 span Y: 154 down to Y: 115 (40px bar height!) */
 					uint16_t seg_col = HIFI_TRACK;
 					if (s < bar_segs[i]) {
-						if (s < 2) seg_col = HIFI_VIOLET;
-						else if (s < 4) seg_col = HIFI_CYAN;
-						else if (s < 6) seg_col = HIFI_EMERALD;
-						else seg_col = HIFI_ROSE;
+						if (s < 3) seg_col = HIFI_VIOLET;        /* Sub-Bass: Deep Violet */
+						else if (s < 6) seg_col = HIFI_CYAN;     /* Bass/Low-Mid: Cyan */
+						else if (s < 9) seg_col = HIFI_EMERALD;  /* Mid/Vocal: Emerald */
+						else if (s < 12) seg_col = HIFI_GOLD;    /* Highs: Studio Gold */
+						else seg_col = HIFI_ROSE;                 /* Peak/Redline: Rose */
 					} else if (s == bar_peaks[i] && s > 0) {
-						seg_col = HIFI_WHITE;
+						seg_col = HIFI_WHITE;                     /* Floating Peak Hold */
 					}
 					GDS_DrawHLine(display, bx, sy, 6, seg_col);
 					GDS_DrawHLine(display, bx, sy + 1, 6, seg_col);
