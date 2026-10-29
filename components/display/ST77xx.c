@@ -239,10 +239,7 @@ static bool Init( struct GDS_Device* Device ) {
 	Private->PageSize = min(8, PAGE_BLOCK / (Device->Width * Depth));
 
 #ifdef SHADOW_BUFFER	
-	Private->Shadowbuffer = heap_caps_malloc( Device->FramebufferSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT );
-	if (!Private->Shadowbuffer) {
-		Private->Shadowbuffer = malloc( Device->FramebufferSize );
-	}
+	Private->Shadowbuffer = malloc( Device->FramebufferSize );	
 	memset(Private->Shadowbuffer, 0xFF, Device->FramebufferSize);
 #endif
 #ifdef USE_IRAM
@@ -333,7 +330,6 @@ static const struct GDS_Device ST77xx = {
 	.SetLayout = SetLayout,
 	.Update = Update16, .Init = Init,
 	.Mode = GDS_RGB565, .Depth = 16,
-	.Alloc = GDS_ALLOC_IRAM_SPI,
 };		
 
 struct GDS_Device* ST77xx_Detect(char *Driver, struct GDS_Device* Device) {

@@ -15,7 +15,6 @@
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "esp_log.h"
-#include "esp_heap_caps.h"
 
 #include "gds.h"
 #include "gds_private.h"
@@ -248,7 +247,6 @@ bool GDS_Init( struct GDS_Device* Device ) {
 	if (!(Device->Alloc & GDS_ALLOC_NONE)) {
 		if ((Device->Alloc & GDS_ALLOC_IRAM) || ((Device->Alloc & GDS_ALLOC_IRAM_SPI) && Device->IF == GDS_IF_SPI)) {
 			Device->Framebuffer = heap_caps_calloc( 1, Device->FramebufferSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA );
-			if (!Device->Framebuffer) Device->Framebuffer = calloc( 1, Device->FramebufferSize );
 		} else {
 			Device->Framebuffer = calloc( 1, Device->FramebufferSize );
 		}	
