@@ -139,6 +139,12 @@ def main():
         print("[ERROR] squeezelite.bin not found in artifact!")
         sys.exit(1)
 
+    if os.path.exists(recovery) and os.path.getsize(recovery) > 1310720:
+        fallback_rec = r"d:\thien\01_DuAn_Code\squeezelite-esp32\build_artifacts\extracted_40820373509\recovery.bin"
+        if os.path.exists(fallback_rec):
+            print(f"[NOTE] recovery.bin size ({os.path.getsize(recovery)}) exceeds 1280KB partition limit, using proven fallback: {fallback_rec}")
+            recovery = fallback_rec
+
     # Flash without wiping otadata
     print(f"\n>>> Flashing to ESP32-S3 via {config['com_port']} at {config['baud_rate']} baud...")
     flash_cmd = [
