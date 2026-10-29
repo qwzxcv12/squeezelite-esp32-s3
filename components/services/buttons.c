@@ -34,7 +34,7 @@ static EXT_RAM_ATTR uint32_t buttons_idle_since;
 
 #define BUTTON_STACK_SIZE	4096
 #define MAX_BUTTONS			32
-#define DEBOUNCE			50
+#define DEBOUNCE			20
 #define BUTTON_QUEUE_LEN	10
 
 static EXT_RAM_ATTR struct button_s {
@@ -233,7 +233,7 @@ static void buttons_task(void* arg) {
 				}  
 			} else {
 				// normal press/release of a button or release of a long-press button or repeat event
-				bool is_long = (button.long_press != 0) || button.repeating;
+				bool is_long = button.repeating;
 				if (!button.shifting) button.handler(button.client, event, press, is_long);
 				// button is a copy, so need to go to real context
 				button.self->shifting = false;
