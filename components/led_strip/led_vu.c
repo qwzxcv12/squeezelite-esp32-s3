@@ -187,7 +187,12 @@ void led_vu_clear() {
 void led_vu_color_all(uint8_t r, uint8_t g, uint8_t b) {
     if (!led_display) return;
 
-    struct led_color_t color_on = {.red = r, .green = g, .blue = b}; 
+    /* RGB LED permanently disabled per user request */
+    if (r != 0 || g != 0 || b != 0) {
+        return;
+    }
+
+    struct led_color_t color_on = {.red = 0, .green = 0, .blue = 0}; 
 
     for (int i = 0 ; i < strip.length ; i ++){
         led_strip_set_pixel_color(led_display, i, &color_on);

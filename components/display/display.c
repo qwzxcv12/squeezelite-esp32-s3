@@ -165,7 +165,6 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 		g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
 		g_tactile_r = 0; g_tactile_g = 100; g_tactile_b = 40;
 		g_tactile_led_expire = now + pdMS_TO_TICKS(200);
-		if (led_display) led_vu_color_all(0, 100, 40);
 		return true; /* Woke up device, don't execute action on wake button press */
 	}
 	
@@ -182,7 +181,6 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
 			g_tactile_r = 100; g_tactile_g = 0; g_tactile_b = 80;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		} else {
 			/* Vol Up on Click (Instant tap-tap-tap volume up) */
 			int new_vol = g_system_volume_pct;
@@ -191,7 +189,6 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			g_osd_color = HIFI_VIOLET;
 			g_tactile_r = 80; g_tactile_g = 0; g_tactile_b = 120;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(140);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		}
 		/* In Standby (!is_active), handle locally & immediately without calling disconnected network controls */
 		return !is_active;
@@ -207,7 +204,6 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
 			g_tactile_r = 0; g_tactile_g = 40; g_tactile_b = 120;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		} else {
 			/* Vol Down on Click (Instant tap-tap-tap volume down) */
 			int new_vol = g_system_volume_pct;
@@ -216,7 +212,6 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			g_osd_color = HIFI_GOLD;
 			g_tactile_r = 0; g_tactile_g = 60; g_tactile_b = 100;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(140);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		}
 		return !is_active;
 		
@@ -246,7 +241,6 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			}
 			g_osd_expire_tick = now + pdMS_TO_TICKS(1500);
 			g_tactile_led_expire = now + pdMS_TO_TICKS(250);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 			return !is_active; /* Pass to audio_controls only when active */
 		} else {
 			/* Play / Pause Toggle (or Standby Ready status) */
@@ -266,7 +260,6 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
 			g_tactile_r = 0; g_tactile_g = 120; g_tactile_b = 30;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		}
 		return !is_active;
 		
@@ -281,7 +274,6 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			snprintf(g_osd_text, sizeof(g_osd_text), "SLEEP");
 			g_osd_color = HIFI_ROSE;
 			g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
-			if (led_display) led_vu_color_all(80, 0, 0);
 			return true; /* Sleep activated safely via displayer_task */
 		} else {
 			/* Single click: Cycle Brightness 100% -> 60% -> 30% -> 100% (NEVER black) */
@@ -298,7 +290,6 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			g_osd_expire_tick = now + pdMS_TO_TICKS(1200);
 			g_tactile_r = 100; g_tactile_g = 70; g_tactile_b = 0;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 			return true; /* Handled completely by display! */
 		}
 	}
@@ -622,7 +613,6 @@ static void displayer_task(void *args) {
 					GDS_SetContrast(display, 0);
 					GDS_DisplayOff(display);
 					pwr_state = 2;
-					if (led_display) led_vu_color_all(0, 0, 0);
 				}
 				for (int w = 0; w < 8 && g_display_sleep_forced && !g_display_hw_sync_req; w++) {
 					vTaskDelay(pdMS_TO_TICKS(25));
@@ -919,32 +909,11 @@ static void displayer_task(void *args) {
 				}
 			}
 
-			/* Onboard WS2812 LED synchronization */
-			if (led_display) {
-				if (now_tick < g_tactile_led_expire) {
-					led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-				} else if (is_active && is_playing && peak > 1) {
-					int bri = (peak * 3) / 2;
-					if (bri > 120) bri = 120;
-					if (bri < 15)  bri = 15;
-					if (peak > 55) {
-						led_vu_color_all(bri, bri / 5, bri / 2);
-					} else if (peak > 30) {
-						led_vu_color_all(0, bri, bri);
-					} else {
-						led_vu_color_all(bri / 3, 0, bri);
-					}
-				} else if (is_active) {
-					int wave = (anim_tick % 40);
-					if (wave > 20) wave = 40 - wave;
-					uint8_t b = 4 + wave / 2;
-					led_vu_color_all(0, b / 2, b);
-				} else {
-					int wave = (anim_tick % 60);
-					if (wave > 30) wave = 60 - wave;
-					uint8_t b = 3 + wave / 3;
-					led_vu_color_all(b, b / 2, 0);
-				}
+			/* Onboard WS2812 RGB LED disabled per user request */
+			static bool s_rgb_off_done = false;
+			if (led_display && !s_rgb_off_done) {
+				led_vu_color_all(0, 0, 0);
+				s_rgb_off_done = true;
 			}
 
 			GDS_Update(display);
@@ -1000,7 +969,6 @@ static void displayer_task(void *args) {
 					GDS_SetContrast(display, 0);
 					GDS_DisplayOff(display);
 					pwr_state = 2;
-					if (led_display) led_vu_color_all(0, 0, 0);
 				}
 				for (int w = 0; w < 8 && g_display_sleep_forced && !g_display_hw_sync_req; w++) {
 					vTaskDelay(pdMS_TO_TICKS(25));
@@ -1298,37 +1266,9 @@ static void displayer_task(void *args) {
 			GDS_DrawHLine(display, knob_x - 2, 119, 5, HIFI_WHITE);
 			GDS_DrawHLine(display, knob_x - 1, 120, 3, HIFI_CYAN);
 
-			/* =========================================================================
-			 * ZONE 5: ONBOARD WS2812 RGB LED (GPIO 21) DANCING TO LIVE AIRPLAY AUDIO
-			 * ========================================================================= */
+			/* Onboard WS2812 RGB LED disabled per user request */
 			if (led_display) {
-				if (now_tick < g_tactile_led_expire) {
-					led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-				} else if (pwr_state == 2) {
-					led_vu_color_all(0, 0, 0);
-				} else if (is_active && is_playing && peak > 2) {
-					/* Dynamic beat pulse: Coral Red on heavy bass, Emerald on mids, Violet on highs */
-					uint8_t bri = (peak > 80) ? 75 : (uint8_t)((peak * 60) / 80 + 15);
-					if (peak > 55) {
-						led_vu_color_all(bri, 0, bri / 4);
-					} else if (peak > 25) {
-						led_vu_color_all(0, bri, bri / 3);
-					} else {
-						led_vu_color_all(bri / 3, 0, bri);
-					}
-				} else if (is_active) {
-					/* Connected / Paused: Gentle breathing cyan */
-					int wave = (anim_tick % 40);
-					if (wave > 20) wave = 40 - wave;
-					uint8_t b = 4 + wave / 2;
-					led_vu_color_all(0, b / 2, b);
-				} else {
-					/* Ready / Standby: Warm subtle amber pulse */
-					int wave = (anim_tick % 60);
-					if (wave > 30) wave = 60 - wave;
-					uint8_t b = 3 + wave / 3;
-					led_vu_color_all(b, b / 2, 0);
-				}
+				// Disabled
 			}
 
 			GDS_Update(display);
