@@ -559,8 +559,8 @@ static void displayer_task(void *args) {
 	if (GDS_GetDepth(display) == 16 && GDS_GetWidth(display) < GDS_GetHeight(display)) {
 		int marquee_x = 0;
 		int anim_tick = 0;
-		int bar_segs[14]  = {3, 5, 8, 7, 10, 12, 9, 8, 11, 9, 7, 5, 4, 3};
-		int bar_peaks[14] = {4, 6, 9, 8, 11, 13, 10, 9, 12, 10, 8, 6, 5, 4};
+		int bar_segs[14]  = {4, 7, 11, 9, 13, 15, 12, 10, 14, 12, 10, 8, 6, 4};
+		int bar_peaks[14] = {5, 8, 12, 10, 14, 16, 13, 11, 15, 13, 11, 9, 7, 5};
 		char last_track[SCROLLABLE_SIZE + 1] = "";
 		bool artwork_initialized = false;
 		TickType_t last_active_tick = xTaskGetTickCount();
@@ -815,24 +815,25 @@ static void displayer_task(void *args) {
 			 * ------------------------------------------------------------- */
 			hifi_fill_round_rect(4, 105, 120, 54, HIFI_CARD, HIFI_PILL);
 
-			/* 14 spectrum bars (6px width, 14 LED levels each, 5 gradient color tiers!) */
+			/* 14 spectrum bars (6px width, 16 tall LED levels each, perfectly filling 47px inside 54px card!) */
 			for (int i = 0; i < 14; i++) {
 				int target = 1;
 				if (is_active && peak > 2) {
 					int dist = (i < 6) ? (6 - i) : (i - 6);
-					int weight = 125 - dist * 10;
+					int weight = 135 - dist * 10;
 					int jitter = ((anim_tick * 5 + i * 17) % 5) - 2;
-					target = ((int)peak * weight * 14) / 8000 + jitter;
+					/* Boosted dynamic gain: lively response even at normal listening volume */
+					target = ((int)peak * weight * 16) / 5800 + jitter;
 				} else if (is_playing) {
-					target = 3 + ((anim_tick * 2 + i * 7) % 9);
+					target = 4 + ((anim_tick * 2 + i * 7) % 11);
 				} else {
-					int wave = ((anim_tick + i * 2) % 20);
-					if (wave > 10) wave = 20 - wave;
+					int wave = ((anim_tick + i * 2) % 24);
+					if (wave > 12) wave = 24 - wave;
 					target = 2 + (wave / 3);
 				}
 
 				if (target < 1) target = 1;
-				if (target > 14) target = 14;
+				if (target > 16) target = 16;
 
 				if (target > bar_segs[i]) {
 					bar_segs[i] = (bar_segs[i] + target * 2) / 3;
@@ -848,14 +849,14 @@ static void displayer_task(void *args) {
 				}
 
 				int bx = 8 + i * 8; /* 14 bars * 8px = 112px (X: 8..119) */
-				for (int s = 0; s < 14; s++) {
-					int sy = 154 - s * 3; /* Levels 0..13 span Y: 154 down to Y: 115 (40px bar height!) */
+				for (int s = 0; s < 16; s++) {
+					int sy = 154 - s * 3; /* Levels 0..15 span Y: 154 down to Y: 109 (47px height, 4px top padding, 3px bottom padding!) */
 					uint16_t seg_col = HIFI_TRACK;
 					if (s < bar_segs[i]) {
-						if (s < 3) seg_col = HIFI_VIOLET;        /* Sub-Bass: Deep Violet */
-						else if (s < 5) seg_col = HIFI_CYAN;     /* Bass: Electric Cyan (2 levels) */
-						else if (s < 7) seg_col = HIFI_EMERALD;  /* Mid: Neon Emerald (2 levels) */
-						else if (s < 11) seg_col = HIFI_GOLD;    /* Highs/Presence: Studio Warm Gold (4 levels!) */
+						if (s < 3) seg_col = HIFI_VIOLET;        /* Sub-Bass: Deep Violet (3 levels) */
+						else if (s < 6) seg_col = HIFI_CYAN;     /* Bass: Electric Cyan (3 levels) */
+						else if (s < 9) seg_col = HIFI_EMERALD;  /* Mid: Neon Emerald (3 levels) */
+						else if (s < 13) seg_col = HIFI_GOLD;    /* Highs/Treble: Studio Warm Gold (4 levels!) */
 						else seg_col = HIFI_ROSE;                 /* Peak/Redline: Rose Punch (3 levels!) */
 					} else if (s == bar_peaks[i] && s > 0) {
 						seg_col = HIFI_WHITE;                     /* Floating Peak Hold */
