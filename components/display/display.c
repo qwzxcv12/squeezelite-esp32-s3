@@ -121,7 +121,7 @@ void display_set_volume(int pct) {
 	if (pct > 100) pct = 100;
 	g_system_volume_pct = pct;
 	snprintf(g_osd_text, sizeof(g_osd_text), "VOL: %d%%", g_system_volume_pct);
-	g_osd_color = HIFI_CYAN;
+	g_osd_color = HIFI_GOLD;
 	g_osd_expire_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1500);
 }
 
@@ -192,7 +192,7 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 				else g_system_volume_pct = 0;
 			}
 			snprintf(g_osd_text, sizeof(g_osd_text), "VOL: %d%%", g_system_volume_pct);
-			g_osd_color = HIFI_CYAN;
+			g_osd_color = HIFI_GOLD;
 			g_osd_expire_tick = now + pdMS_TO_TICKS(1500);
 			g_tactile_r = 0; g_tactile_g = 60; g_tactile_b = 100;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(140);
@@ -690,7 +690,7 @@ static void displayer_task(void *args) {
 			hifi_fill_round_rect(4, 2, 120, 17, HIFI_CARD, HIFI_PILL);
 
 			/* Row 1: Status Dot + Source Badge (AIRPLAY) + Time (01:23 / 03:45) */
-			uint16_t dot_col = is_active ? ((anim_tick & 8) ? HIFI_EMERALD : HIFI_CYAN) : HIFI_CYAN;
+			uint16_t dot_col = is_active ? ((anim_tick & 8) ? HIFI_EMERALD : HIFI_SLATE) : HIFI_SLATE;
 			GDS_DrawBox(display, 8, 6, 11, 9, dot_col, true);
 
 			GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
@@ -708,23 +708,23 @@ static void displayer_task(void *args) {
 
 			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
 			int timew = GDS_FontMeasureString(display, time_buf);
-			uint16_t time_col = (strcmp(time_buf, "32-BIT") == 0) ? HIFI_GOLD : HIFI_CYAN;
+			uint16_t time_col = (strcmp(time_buf, "32-BIT") == 0) ? HIFI_GOLD : HIFI_SLATE;
 			GDS_FontDrawString(display, max(58, 120 - timew), 3, time_buf, time_col);
 
-			/* Row 2: Scrubber timeline bar at Y: 15..16 (Width 112px, X: 8..119) */
+			/* Row 2: Scrubber timeline bar at Y: 15..16 in Warm Studio Gold (Width 112px, X: 8..119) */
 			GDS_DrawHLine(display, 8, 15, 112, HIFI_TRACK);
 			GDS_DrawHLine(display, 8, 16, 112, HIFI_TRACK);
 			if (is_active && cur_duration > 0) {
 				int fill_w = (int)((cur_elapsed * 112) / cur_duration);
 				if (fill_w > 112) fill_w = 112;
 				if (fill_w > 0) {
-					GDS_DrawHLine(display, 8, 15, fill_w, HIFI_CYAN);
-					GDS_DrawHLine(display, 8, 16, fill_w, HIFI_CYAN);
+					GDS_DrawHLine(display, 8, 15, fill_w, HIFI_GOLD);
+					GDS_DrawHLine(display, 8, 16, fill_w, HIFI_GOLD);
 				}
 			} else if (is_active && is_playing) {
 				int pulse_x = 8 + ((anim_tick * 4) % 96);
-				GDS_DrawHLine(display, pulse_x, 15, 16, HIFI_CYAN);
-				GDS_DrawHLine(display, pulse_x, 16, 16, HIFI_CYAN);
+				GDS_DrawHLine(display, pulse_x, 15, 16, HIFI_GOLD);
+				GDS_DrawHLine(display, pulse_x, 16, 16, HIFI_GOLD);
 			}
 
 			/* -------------------------------------------------------------
@@ -734,14 +734,14 @@ static void displayer_task(void *args) {
 			bool record_spinning = is_active && (is_playing || peak > 2);
 
 			if (!g_has_custom_artwork) {
-				/* Strobe markings on left */
+				/* Strobe markings on left in metallic silver/white */
 				for (int s = 0; s < 4; s++) {
 					int sy = 37 + s * 7;
-					uint16_t sc = (record_spinning && ((anim_tick + s) & 2)) ? HIFI_CYAN : HIFI_TRACK;
+					uint16_t sc = (record_spinning && ((anim_tick + s) & 2)) ? HIFI_WHITE : HIFI_TRACK;
 					GDS_DrawBox(display, 13, sy, 15, sy + 2, sc, true);
 				}
 				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-				GDS_FontDrawString(display, 9, 68, "33", is_active ? HIFI_EMERALD : HIFI_SLATE);
+				GDS_FontDrawString(display, 9, 68, "33", is_active ? HIFI_GOLD : HIFI_SLATE);
 
 				/* Large Centered Vinyl Disc (Radius 27, cx 64, cy 51) */
 				hifi_draw_vinyl_disc(64, 51, 27, anim_tick, record_spinning);
@@ -795,7 +795,7 @@ static void displayer_task(void *args) {
 				int text_w = GDS_FontMeasureString(display, track_buf);
 				if (text_w < 112) text_w = 112;
 
-				int text_color = is_active ? HIFI_WHITE : HIFI_CYAN;
+				int text_color = is_active ? HIFI_WHITE : HIFI_SLATE;
 				GDS_SetTextWidth(display, 119);
 				GDS_FontDrawString(display, 8 - marquee_x, 87, track_buf, text_color);
 				if (8 + text_w - marquee_x < 119) {
@@ -853,10 +853,10 @@ static void displayer_task(void *args) {
 					uint16_t seg_col = HIFI_TRACK;
 					if (s < bar_segs[i]) {
 						if (s < 3) seg_col = HIFI_VIOLET;        /* Sub-Bass: Deep Violet */
-						else if (s < 6) seg_col = HIFI_CYAN;     /* Bass/Low-Mid: Cyan */
-						else if (s < 9) seg_col = HIFI_EMERALD;  /* Mid/Vocal: Emerald */
-						else if (s < 12) seg_col = HIFI_GOLD;    /* Highs: Studio Gold */
-						else seg_col = HIFI_ROSE;                 /* Peak/Redline: Rose */
+						else if (s < 5) seg_col = HIFI_CYAN;     /* Bass: Electric Cyan (2 levels) */
+						else if (s < 7) seg_col = HIFI_EMERALD;  /* Mid: Neon Emerald (2 levels) */
+						else if (s < 11) seg_col = HIFI_GOLD;    /* Highs/Presence: Studio Warm Gold (4 levels!) */
+						else seg_col = HIFI_ROSE;                 /* Peak/Redline: Rose Punch (3 levels!) */
 					} else if (s == bar_peaks[i] && s > 0) {
 						seg_col = HIFI_WHITE;                     /* Floating Peak Hold */
 					}
