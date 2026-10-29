@@ -817,6 +817,10 @@ void wake_controller(void) {
 }
 
 in_addr_t discover_server(char *default_server, int max) {
+	if (output.external) {
+		/* Don't blast UDP broadcast discovery when external sink (AirPlay/BT/Spotify) is active */
+		return 0;
+	}
 	struct sockaddr_in d;
 	struct sockaddr_in s;
 	char buf[32], port_d[] = "JSON", clip_d[] = "CLIP";

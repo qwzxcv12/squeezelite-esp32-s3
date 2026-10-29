@@ -398,34 +398,25 @@ static void hifi_draw_album_box(const uint8_t *jpeg_data) {
 		GDS_ClearWindow(display, 0, 20, 127, 81, HIFI_BG);
 		hifi_fill_round_rect(4, 20, 120, 62, HIFI_CARD, HIFI_PILL);
 
-		if (jpeg_data && jpeg_data != default_artwork) {
-			g_has_custom_artwork = true;
-			uint16_t orig_h = display->Height;
-			display->Height = 80;
-			GDS_DrawJPEG(display, (uint8_t*)jpeg_data, 34, 22, GDS_IMAGE_CENTER | GDS_IMAGE_FIT);
-			display->Height = orig_h;
-			GDS_DrawBox(display, 33, 21, 92, 80, HIFI_PILL, false);
-		} else {
-			g_has_custom_artwork = false;
-			/* Strobe dots on left */
-			for (int s = 0; s < 4; s++) {
-				int sy = 37 + s * 7;
-				GDS_DrawBox(display, 13, sy, 15, sy + 2, HIFI_TRACK, true);
-			}
-			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-			GDS_FontDrawString(display, 9, 68, "33", HIFI_SLATE);
-
-			/* Centered Large Vinyl Disc (Radius 27, cx 64, cy 51) */
-			hifi_draw_vinyl_disc(64, 51, 27, 0, false);
-
-			/* Tonearm on right parked */
-			GDS_DrawBox(display, 111, 28, 115, 32, HIFI_PILL, true);
-			GDS_DrawPixelFast(display, 113, 30, HIFI_WHITE);
-			GDS_DrawVLine(display, 113, 24, 4, HIFI_SLATE);
-			GDS_DrawVLine(display, 113, 30, 20, HIFI_PILL);
-			GDS_DrawBox(display, 112, 50, 114, 53, HIFI_GOLD, true);
-			GDS_DrawHLine(display, 110, 42, 6, HIFI_SLATE);
+		g_has_custom_artwork = false;
+		/* Strobe dots on left */
+		for (int s = 0; s < 4; s++) {
+			int sy = 37 + s * 7;
+			GDS_DrawBox(display, 13, sy, 15, sy + 2, HIFI_TRACK, true);
 		}
+		GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+		GDS_FontDrawString(display, 9, 68, "33", HIFI_SLATE);
+
+		/* Centered Large Vinyl Disc (Radius 27, cx 64, cy 51) - always smooth turntable */
+		hifi_draw_vinyl_disc(64, 51, 27, 0, false);
+
+		/* Tonearm on right parked */
+		GDS_DrawBox(display, 111, 28, 115, 32, HIFI_PILL, true);
+		GDS_DrawPixelFast(display, 113, 30, HIFI_WHITE);
+		GDS_DrawVLine(display, 113, 24, 4, HIFI_SLATE);
+		GDS_DrawVLine(display, 113, 30, 20, HIFI_PILL);
+		GDS_DrawBox(display, 112, 50, 114, 53, HIFI_GOLD, true);
+		GDS_DrawHLine(display, 110, 42, 6, HIFI_SLATE);
 	} else {
 		/* Right Deck Box in Landscape: X: 102..155, Y: 49..107 */
 		GDS_ClearWindow(display, 102, 49, 159, 107, HIFI_BG);
@@ -1377,7 +1368,8 @@ static void displayer_artwork_unlocked(uint8_t *data) {
 }
 
 void displayer_artwork(uint8_t *data) {
-	if (!display) return;
+	/* Avoid blocking RTSP audio thread with heavy external artwork decoding */
+	if (!display || data != default_artwork) return;
 	xSemaphoreTake(displayer.mutex, portMAX_DELAY);
 	displayer_artwork_unlocked(data);
 	xSemaphoreGive(displayer.mutex);

@@ -253,7 +253,7 @@ static bool raop_sink_cmd_handler(raop_event_t event, va_list args)
 			error = raop_sync.sum / min(raop_sync.count, raop_sync.win);
 
 			// wait till we have enough data or there is a strong deviation
-			if ((raop_sync.count >= raop_sync.win && abs(error) > 35) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 150)) {
+			if ((raop_sync.count >= raop_sync.win && abs(error) > 120) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 350)) {
 				if (error < 0) {
 					output.skip_frames = -(error * RAOP_SAMPLE_RATE) / 1000;
 					output.state = OUTPUT_SKIP_FRAMES;					
