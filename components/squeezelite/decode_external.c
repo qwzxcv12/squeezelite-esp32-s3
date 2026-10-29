@@ -252,9 +252,8 @@ static bool raop_sink_cmd_handler(raop_event_t event, va_list args)
 			raop_sync.sum += error;
 			error = raop_sync.sum / min(raop_sync.count, raop_sync.win);
 
-			// Gentle clock drift compensation: only trigger when consistent drift exceeds threshold,
-			// and clamp adjustments to small micro-steps (max 15ms = 661 frames) so they are imperceptible to human ear.
-			if ((raop_sync.count >= raop_sync.win && abs(error) > 150) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 350)) {
+			// Standalone I2S DAC: frame skipping is disabled to eliminate audible audio stutter/jitter (clock drift is handled in rtp.c)
+			if (0 && ((raop_sync.count >= raop_sync.win && abs(error) > 150) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 350))) {
 				int adj_ms = min(abs(error), 15);
 				if (error < 0) {
 					output.skip_frames = (adj_ms * RAOP_SAMPLE_RATE) / 1000;
@@ -303,7 +302,7 @@ static bool raop_sink_cmd_handler(raop_event_t event, va_list args)
 			raop_sync.win = 1;
 			raop_sync.sum = raop_sync.count = 0;
 			memset(raop_sync.errors, 0, sizeof(raop_sync.errors));
-			raop_sync.enabled = !strcasestr(output.device, "BT"); /* Active with smooth micro-stepping */
+			raop_sync.enabled = false; /* Disable I2S output frame skipping; clock drift is auto-resynced in rtp.c */
 			output.next_sample_rate = output.current_sample_rate = RAOP_SAMPLE_RATE;
 			break;
         case RAOP_STALLED:
