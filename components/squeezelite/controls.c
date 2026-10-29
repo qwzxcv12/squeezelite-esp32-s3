@@ -175,6 +175,10 @@ const actrls_t LMS_controls = {
  * 
  */
 static void connect_cli_socket(void) {
+	if (!server_ip || !server_cport) {
+		cli_sock = -1;
+		return;
+	}
 	struct sockaddr_in addr = {
 		.sin_family = AF_INET,
 		.sin_addr.s_addr = server_ip,
@@ -183,6 +187,11 @@ static void connect_cli_socket(void) {
 	socklen_t addrlen = sizeof(addr);
 	
 	cli_sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (cli_sock < 0) return;
+
+	struct timeval tv = { .tv_sec = 1, .tv_usec = 0 };
+	setsockopt(cli_sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+	setsockopt(cli_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 	
 	if (connect(cli_sock, (struct sockaddr *) &addr, addrlen) < 0) {
 		LOG_ERROR("unable to connect to server %s:%hu with cli", inet_ntoa(server_ip), server_cport);
@@ -197,11 +206,17 @@ static void connect_cli_socket(void) {
 static void cli_send_cmd(char *cmd) {
 	char packet[96];
 	int len;
+
+	if (!server_ip || !server_cport) {
+		LOG_DEBUG("Standby mode (no LMS server): ignoring CLI cmd %s", cmd);
+		return;
+	}
 	
 	len = sprintf(packet, "%02x:%02x:%02x:%02x:%02x:%02x %s\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], cmd);
 	LOG_DEBUG("sending command %s at %s:%hu", packet, inet_ntoa(server_ip), server_cport);
 	
 	if (cli_sock < 0) connect_cli_socket();
+	if (cli_sock < 0) return;
 
 	if (send(cli_sock, packet, len, MSG_DONTWAIT) < 0) {
 		closesocket(cli_sock);

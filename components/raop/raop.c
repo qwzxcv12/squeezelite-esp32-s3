@@ -341,6 +341,11 @@ bool raop_cmd(struct raop_ctx_s *ctx, raop_event_t event, void *param) {
 	}
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (sock >= 0) {
+		struct timeval tv = { .tv_sec = 1, .tv_usec = 200000 };
+		setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+	}
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;

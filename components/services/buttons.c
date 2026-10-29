@@ -34,8 +34,8 @@ static EXT_RAM_ATTR uint32_t buttons_idle_since;
 
 #define BUTTON_STACK_SIZE	4096
 #define MAX_BUTTONS			32
-#define DEBOUNCE			20
-#define BUTTON_QUEUE_LEN	10
+#define DEBOUNCE			30
+#define BUTTON_QUEUE_LEN	32
 
 static EXT_RAM_ATTR struct button_s {
 	void *client;
@@ -47,6 +47,10 @@ static EXT_RAM_ATTR struct button_s {
 	int	long_press;
 	bool long_timer, shifted, shifting;
 	bool repeating;
+	bool long_fired;
+	uint8_t debounce_cnt;
+	TickType_t press_tick;
+	TickType_t repeat_tick;
 	int type, level;	
 	TimerHandle_t timer;
 } buttons[MAX_BUTTONS];
@@ -124,24 +128,92 @@ static void buttons_timer_handler( TimerHandle_t xTimer ) {
 /****************************************************************************************
  * Buttons polling timer
  */
+#define BUTTON_REPEAT_PERIOD_MS 180
+
 static void buttons_polling( TimerHandle_t xTimer ) {
-	for (int i = 0; polled_gpio[i].gpio != -1; i++) {
-		if (!polled_gpio[i].button) continue;
-		
-		int level = gpio_get_level(polled_gpio[i].gpio);
-	
-		if (level != polled_gpio[i].level) {
-			polled_gpio[i].level = level;
-			buttons_handler(polled_gpio[i].button, level);
-		}	
-	}	
+	TickType_t now = xTaskGetTickCount();
+	for (int i = 0; i < n_buttons; i++) {
+		struct button_s *b = &buttons[i];
+		if (b->gpio < 0 || b->gpio >= GPIO_NUM_MAX) continue;
+
+		// Triple-sample digital glitch filter to reject PWM/SPI/RF crosstalk spikes
+		int r1 = gpio_get_level(b->gpio);
+		int r2 = gpio_get_level(b->gpio);
+		int r3 = gpio_get_level(b->gpio);
+		if (r1 != r2 || r2 != r3) continue;
+
+		int raw_level = r1;
+		bool raw_pressed = (raw_level == b->type);
+		bool cur_pressed = (b->level == b->type);
+
+		if (raw_pressed != cur_pressed) {
+			b->debounce_cnt++;
+			// Require 3 consecutive 10ms ticks (30ms) of stable signal before state transition
+			if (b->debounce_cnt >= 3) {
+				b->debounce_cnt = 0;
+				b->level = raw_level;
+
+				if (b->shifter && b->shifter->type == b->shifter->level) {
+					b->shifter->shifting = true;
+				}
+
+				if (raw_pressed) {
+					// Clean transition: RELEASED -> PRESSED
+					b->press_tick = now;
+					b->repeating = false;
+					b->long_fired = false;
+					b->long_timer = false;
+					if (!b->long_press) {
+						xQueueSend(button_queue, b, 0);
+					}
+				} else {
+					// Clean transition: PRESSED -> RELEASED
+					if (b->long_press && !b->long_fired) {
+						// Short click (released before long_press threshold)
+						b->long_timer = true;
+						b->repeating = false;
+						xQueueSend(button_queue, b, 0);
+						b->long_timer = false;
+					} else {
+						// Release after long press / repeat, or release of non-long-press button
+						b->long_timer = false;
+						b->repeating = false;
+						b->long_fired = false;
+						xQueueSend(button_queue, b, 0);
+					}
+				}
+			}
+		} else {
+			b->debounce_cnt = 0;
+			if (cur_pressed && b->long_press > 0) {
+				uint32_t held_ms = pdTICKS_TO_MS(now - b->press_tick);
+				if (!b->long_fired) {
+					if (held_ms >= (uint32_t)b->long_press) {
+						// First long-press threshold reached!
+						b->long_fired = true;
+						b->repeating = true;
+						b->long_timer = false;
+						b->repeat_tick = now;
+						xQueueSend(button_queue, b, 0);
+					}
+				} else {
+					uint32_t repeat_ms = pdTICKS_TO_MS(now - b->repeat_tick);
+					if (repeat_ms >= BUTTON_REPEAT_PERIOD_MS) {
+						// Continuous hold auto-repeat
+						b->repeating = true;
+						b->long_timer = false;
+						b->repeat_tick = now;
+						xQueueSend(button_queue, b, 0);
+					}
+				}
+			}
+		}
+	}
 }
 
 /****************************************************************************************
  * Buttons timer handler for press/longpress
  */
-#define BUTTON_REPEAT_PERIOD_MS 180
-
 static void buttons_handler(struct button_s *button, int level) {
 	button->level = level;
 
@@ -335,31 +407,39 @@ void button_create(void *client, int gpio, int type, bool pull, int debounce, bu
 		}
 	}
 	
+	// Explicitly reinforce internal pull-up/down and disable edge ISR on on-chip GPIOs
+	if (gpio >= 0 && gpio < GPIO_NUM_MAX) {
+		gpio_intr_disable(gpio);
+		gpio_set_intr_type(gpio, GPIO_INTR_DISABLE);
+		if (pull) {
+			if (type == BUTTON_LOW) {
+				gpio_pullup_en(gpio);
+				gpio_pulldown_dis(gpio);
+			} else {
+				gpio_pulldown_en(gpio);
+				gpio_pullup_dis(gpio);
+			}
+		}
+	}
+
 	// and initialize level ...
 	buttons[n_buttons].level = gpio_get_level_x(gpio);
-	
-	// nasty ESP32 bug: fire-up constantly INT on GPIO 36/39 if ADC1, AMP, Hall used which WiFi does when PS is activated
-	for (int i = 0; polled_gpio[i].gpio != -1; i++) if (polled_gpio[i].gpio == gpio) {
+	buttons[n_buttons].debounce_cnt = 0;
+	buttons[n_buttons].long_fired = false;
+
+	if (gpio >= 0 && gpio < GPIO_NUM_MAX) {
+		// Use noise-immune 10ms triple-sampled digital filter polling for all on-chip GPIOs
 		if (!polled_timer) {
-			polled_timer = xTimerCreate("buttonsPolling", 100 / portTICK_RATE_MS, pdTRUE, polled_gpio, buttons_polling);		
+			polled_timer = xTimerCreate("buttonsPolling", pdMS_TO_TICKS(10), pdTRUE, NULL, buttons_polling);
 			xTimerStart(polled_timer, portMAX_DELAY);
-		}	
-	
-		polled_gpio[i].button = buttons + n_buttons;					
-		polled_gpio[i].level = gpio_get_level(gpio);
-		ESP_LOGW(TAG, "creating polled gpio %u, level %u", gpio, polled_gpio[i].level);		
-	
-		gpio = -1;
-		break;
-	}
-	
-	// only create ISR if this is not a polled gpio
-	if (gpio != -1) {
-		// we need any edge detection
+		}
+		ESP_LOGI(TAG, "registered noise-filtered on-chip button GPIO %u (initial level %u)", gpio, buttons[n_buttons].level);
+	} else if (gpio >= GPIO_NUM_MAX) {
+		// External I2C/SPI GPIO expander uses interrupt + timer
 		gpio_set_intr_type_x(gpio, GPIO_INTR_ANYEDGE);
 		gpio_isr_handler_add_x(gpio, gpio_isr_handler, buttons + n_buttons);
 		gpio_intr_enable_x(gpio);
-	}	
+	}
 
 	n_buttons++;
 }	
