@@ -252,17 +252,18 @@ static bool raop_sink_cmd_handler(raop_event_t event, va_list args)
 			raop_sync.sum += error;
 			error = raop_sync.sum / min(raop_sync.count, raop_sync.win);
 
-			// wait till we have enough data or there is a strong deviation
-			// Frame skipping/pausing is disabled on standalone I2S DAC to eliminate audible micro-stutters (e.g. 7320 frames drop)
-			if (0 && ((raop_sync.count >= raop_sync.win && abs(error) > 120) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 350))) {
+			// Gentle clock drift compensation: only trigger when consistent drift exceeds threshold,
+			// and clamp adjustments to small micro-steps (max 15ms = 661 frames) so they are imperceptible to human ear.
+			if ((raop_sync.count >= raop_sync.win && abs(error) > 150) || (raop_sync.count >= SYNC_WIN_CHECK && abs(error) > 350)) {
+				int adj_ms = min(abs(error), 15);
 				if (error < 0) {
-					output.skip_frames = -(error * RAOP_SAMPLE_RATE) / 1000;
+					output.skip_frames = (adj_ms * RAOP_SAMPLE_RATE) / 1000;
 					output.state = OUTPUT_SKIP_FRAMES;					
-					LOG_INFO("skipping %u frames (count:%d)", output.skip_frames, raop_sync.count);
+					LOG_INFO("smooth skipping %u frames (error:%d, count:%d)", output.skip_frames, error, raop_sync.count);
 				} else {
-					output.pause_frames = (error * RAOP_SAMPLE_RATE) / 1000;
+					output.pause_frames = (adj_ms * RAOP_SAMPLE_RATE) / 1000;
 					output.state = OUTPUT_PAUSE_FRAMES;
-					LOG_INFO("pausing for %u frames (count: %d)", output.pause_frames, raop_sync.count);
+					LOG_INFO("smooth pausing %u frames (error:%d, count:%d)", output.pause_frames, error, raop_sync.count);
 				}
 				
 				raop_sync.sum = raop_sync.count = 0;
@@ -302,7 +303,7 @@ static bool raop_sink_cmd_handler(raop_event_t event, va_list args)
 			raop_sync.win = 1;
 			raop_sync.sum = raop_sync.count = 0;
 			memset(raop_sync.errors, 0, sizeof(raop_sync.errors));
-			raop_sync.enabled = false; /* Disable aggressive frame skipping to eliminate periodic audio hitching */
+			raop_sync.enabled = !strcasestr(output.device, "BT"); /* Active with smooth micro-stepping */
 			output.next_sample_rate = output.current_sample_rate = RAOP_SAMPLE_RATE;
 			break;
         case RAOP_STALLED:
