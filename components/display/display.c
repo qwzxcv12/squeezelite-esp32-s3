@@ -404,13 +404,26 @@ static void hifi_draw_album_box(const uint8_t *jpeg_data) {
 		hifi_fill_round_rect(4, 20, 120, 62, HIFI_CARD, HIFI_PILL);
 
 		g_has_custom_artwork = false;
-		/* Strobe dots on left */
+		/* 4-tier mini vertical volume meter ticks (Y: 37, 44, 51, 58) */
+		int v_thresholds[4] = { 90, 60, 30, 1 };
 		for (int s = 0; s < 4; s++) {
 			int sy = 37 + s * 7;
-			GDS_DrawBox(display, 13, sy, 15, sy + 2, HIFI_TRACK, true);
+			bool tier_lit = (g_system_volume_pct >= v_thresholds[s]);
+			uint16_t sc = tier_lit ? HIFI_GOLD : HIFI_TRACK;
+			GDS_DrawBox(display, 13, sy, 15, sy + 2, sc, true);
 		}
+		/* Volume level display on left of turntable (replacing legacy 33 RPM indicator) */
+		char vol_str[8];
+		if (g_system_volume_pct == 0) {
+			strcpy(vol_str, "MUT");
+		} else {
+			snprintf(vol_str, sizeof(vol_str), "%d%%", g_system_volume_pct);
+		}
+		int vx = 4 + (32 - (int)strlen(vol_str) * 7) / 2;
+		if (vx < 5) vx = 5;
+		GDS_DrawBox(display, 5, 66, 35, 80, HIFI_CARD, true);
 		GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-		GDS_FontDrawString(display, 9, 68, "33", HIFI_SLATE);
+		GDS_FontDrawString(display, vx, 67, vol_str, (g_system_volume_pct == 0) ? HIFI_ROSE : HIFI_SLATE);
 
 		/* Centered Large Vinyl Disc (Radius 27, cx 64, cy 51) - always smooth turntable */
 		hifi_draw_vinyl_disc(64, 51, 27, 0, false);
@@ -750,14 +763,32 @@ static void displayer_task(void *args) {
 			bool record_spinning = is_active && (is_playing || peak > 2);
 
 			if (!g_has_custom_artwork) {
-				/* Strobe markings on left in metallic silver/white */
+				/* 4-tier mini vertical volume meter ticks (Y: 37, 44, 51, 58) */
+				int v_thresholds[4] = { 90, 60, 30, 1 };
 				for (int s = 0; s < 4; s++) {
 					int sy = 37 + s * 7;
-					uint16_t sc = (record_spinning && ((anim_tick + s) & 2)) ? HIFI_WHITE : HIFI_TRACK;
+					bool tier_lit = (g_system_volume_pct >= v_thresholds[s]);
+					uint16_t sc = HIFI_TRACK;
+					if (tier_lit) {
+						sc = (record_spinning && ((anim_tick + s) & 2)) ? HIFI_WHITE : HIFI_GOLD;
+					}
 					GDS_DrawBox(display, 13, sy, 15, sy + 2, sc, true);
 				}
+				/* Volume level display on left of turntable (replacing legacy 33 RPM indicator) */
+				char vol_str[8];
+				uint16_t v_col;
+				if (g_system_volume_pct == 0) {
+					strcpy(vol_str, "MUT");
+					v_col = HIFI_ROSE;
+				} else {
+					snprintf(vol_str, sizeof(vol_str), "%d%%", g_system_volume_pct);
+					v_col = is_active ? HIFI_GOLD : HIFI_SLATE;
+				}
+				int vx = 4 + (32 - (int)strlen(vol_str) * 7) / 2;
+				if (vx < 5) vx = 5;
+				GDS_DrawBox(display, 5, 66, 35, 80, HIFI_CARD, true);
 				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-				GDS_FontDrawString(display, 9, 68, "33", is_active ? HIFI_GOLD : HIFI_SLATE);
+				GDS_FontDrawString(display, vx, 67, vol_str, v_col);
 
 				/* Large Centered Vinyl Disc (Radius 27, cx 64, cy 51) */
 				hifi_draw_vinyl_disc(64, 51, 27, anim_tick, record_spinning);
