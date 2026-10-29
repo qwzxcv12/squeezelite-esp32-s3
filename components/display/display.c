@@ -171,9 +171,20 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 	
 	/* 2. Process according to User's Standardized Layout: */
 	switch (gpio) {
-	case 13: /* K1 - Next Track (Click) / Volume Up (Hold) */
+	case 13: /* K1 - Volume Up (Click) / Next Track (Hold >= 350ms) */
 		if (long_press) {
-			/* Vol Up (Continuous Hold Auto-Repeat) */
+			/* Next Track on Long Press (Hold >= 350ms) */
+			static TickType_t s_last_k1_hold = 0;
+			if (now - s_last_k1_hold < pdMS_TO_TICKS(800)) return true; /* Throttle to single skip per hold */
+			s_last_k1_hold = now;
+			snprintf(g_osd_text, sizeof(g_osd_text), is_active ? "NEXT >>|" : "NEXT (IDLE)");
+			g_osd_color = HIFI_VIOLET;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
+			g_tactile_r = 100; g_tactile_g = 0; g_tactile_b = 80;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+		} else {
+			/* Vol Up on Click (Instant tap-tap-tap volume up) */
 			int new_vol = g_system_volume_pct;
 			if (new_vol <= 95) new_vol += 5; else new_vol = 100;
 			display_apply_volume(new_vol);
@@ -181,21 +192,24 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			g_tactile_r = 80; g_tactile_g = 0; g_tactile_b = 120;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(140);
 			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		} else {
-			/* Next (or Standby instant feedback) */
-			snprintf(g_osd_text, sizeof(g_osd_text), is_active ? "NEXT >>|" : "NEXT (IDLE)");
-			g_osd_color = HIFI_VIOLET;
-			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
-			g_tactile_r = 100; g_tactile_g = 0; g_tactile_b = 80;
-			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		}
 		/* In Standby (!is_active), handle locally & immediately without calling disconnected network controls */
 		return !is_active;
 		
-	case 14: /* K2 - Prev Track (Click) / Volume Down (Hold) */
+	case 14: /* K2 - Volume Down (Click) / Prev Track (Hold >= 350ms) */
 		if (long_press) {
-			/* Vol Down (Continuous Hold Auto-Repeat) */
+			/* Prev Track on Long Press (Hold >= 350ms) */
+			static TickType_t s_last_k2_hold = 0;
+			if (now - s_last_k2_hold < pdMS_TO_TICKS(800)) return true; /* Throttle to single skip per hold */
+			s_last_k2_hold = now;
+			snprintf(g_osd_text, sizeof(g_osd_text), is_active ? "|<< PREV" : "PREV (IDLE)");
+			g_osd_color = HIFI_CYAN;
+			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
+			g_tactile_r = 0; g_tactile_g = 40; g_tactile_b = 120;
+			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
+			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
+		} else {
+			/* Vol Down on Click (Instant tap-tap-tap volume down) */
 			int new_vol = g_system_volume_pct;
 			if (new_vol >= 5) new_vol -= 5; else new_vol = 0;
 			display_apply_volume(new_vol);
@@ -203,21 +217,13 @@ bool display_button_hook(int gpio, actrls_action_e action, button_event_e event,
 			g_tactile_r = 0; g_tactile_g = 60; g_tactile_b = 100;
 			g_tactile_led_expire = now + pdMS_TO_TICKS(140);
 			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
-		} else {
-			/* Prev (or Standby instant feedback) */
-			snprintf(g_osd_text, sizeof(g_osd_text), is_active ? "|<< PREV" : "PREV (IDLE)");
-			g_osd_color = HIFI_CYAN;
-			g_osd_expire_tick = now + pdMS_TO_TICKS(1000);
-			g_tactile_r = 0; g_tactile_g = 40; g_tactile_b = 120;
-			g_tactile_led_expire = now + pdMS_TO_TICKS(180);
-			if (led_display) led_vu_color_all(g_tactile_r, g_tactile_g, g_tactile_b);
 		}
 		return !is_active;
 		
-	case 15: /* K3 - Play/Pause (Click) / Mute/Unmute (Hold) */
+	case 15: /* K3 - Play/Pause (Click) / Mute/Unmute (Hold >= 350ms) */
 		if (long_press) {
 			static TickType_t s_last_k3_hold = 0;
-			if (now - s_last_k3_hold < pdMS_TO_TICKS(600)) return true; /* Throttle repeat */
+			if (now - s_last_k3_hold < pdMS_TO_TICKS(400)) return true; /* Throttle repeat */
 			s_last_k3_hold = now;
 
 			static bool s_is_muted = false;
