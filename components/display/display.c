@@ -335,35 +335,48 @@ static void hifi_fill_round_rect(int x, int y, int w, int h, uint16_t fill_col, 
 /****************************************************************************************
  * Draw a true circular Hi-Fi Vinyl Record with rotating light reflection & micro-grooves
  */
-static void hifi_draw_vinyl_disc(int cx, int cy, int anim_tick, bool spinning) {
+static void hifi_draw_vinyl_disc(int cx, int cy, int radius, int anim_tick, bool spinning) {
 	int phase = spinning ? (anim_tick & 7) : 1;
-	for (int dy = -22; dy <= 22; dy++) {
-		for (int dx = -22; dx <= 22; dx++) {
+	int r2 = radius * radius;
+	int r_rim2 = (radius * 94) * (radius * 94) / 10000;
+	int r_label2 = (radius * 36) * (radius * 36) / 10000;
+	int r_label_in2 = (radius * 32) * (radius * 32) / 10000;
+	int r_hole2 = (radius * 10) * (radius * 10) / 10000;
+	if (r_hole2 < 4) r_hole2 = 4;
+
+	for (int dy = -radius; dy <= radius; dy++) {
+		for (int dx = -radius; dx <= radius; dx++) {
 			int d2 = dx * dx + dy * dy;
-			if (d2 > 484) continue;
+			if (d2 > r2) continue;
 			uint16_t col = 0x0862; /* Deep graphite vinyl body */
-			if (d2 >= 435) {
+
+			if (d2 >= r_rim2) {
 				col = HIFI_PILL;   /* Smooth outer metallic rim */
-			} else if (d2 > 72) {
+			} else if (d2 > r_label2) {
 				/* Rotating diagonal light sheen across vinyl grooves */
 				bool sheen = false;
+				int threshold = r2 / 30;
+				int threshold2 = r2 / 18;
 				switch (phase & 3) {
-					case 0: sheen = (dx * dy > 16); break;
-					case 1: sheen = ((dx + dy) * (dx - dy) > 28); break;
-					case 2: sheen = (dx * dy < -16); break;
-					case 3: sheen = ((dx - dy) * (dx + dy) > 28); break;
+					case 0: sheen = (dx * dy > threshold); break;
+					case 1: sheen = ((dx + dy) * (dx - dy) > threshold2); break;
+					case 2: sheen = (dx * dy < -threshold); break;
+					case 3: sheen = ((dx - dy) * (dx + dy) > threshold2); break;
 				}
-				if (d2 >= 265 && d2 <= 285) {
+				/* Concentric groove rings */
+				int g1 = (radius * 75) / 100;
+				int g2 = (radius * 55) / 100;
+				if (abs(d2 - g1 * g1) < radius * 2) {
 					col = sheen ? HIFI_CYAN : HIFI_TRACK;
-				} else if (d2 >= 155 && d2 <= 172) {
+				} else if (abs(d2 - g2 * g2) < radius * 2) {
 					col = sheen ? HIFI_VIOLET : HIFI_TRACK;
 				} else if (sheen) {
 					col = HIFI_CARD;
 				}
-			} else if (d2 >= 52) {
+			} else if (d2 >= r_label_in2) {
 				col = HIFI_CYAN;   /* Outer label ring */
-			} else if (d2 >= 9) {
-				col = (dx + dy > 0) ? HIFI_VIOLET : HIFI_ROSE; /* Vibrant dual-tone label */
+			} else if (d2 >= r_hole2) {
+				col = (dx + dy > 0) ? HIFI_EMERALD : HIFI_VIOLET; /* Vibrant dual-tone label */
 			} else {
 				col = HIFI_BG;     /* Center spindle hole */
 			}
@@ -381,19 +394,37 @@ static void hifi_draw_album_box(const uint8_t *jpeg_data) {
 	bool is_portrait = (GDS_GetWidth(display) < GDS_GetHeight(display));
 
 	if (is_portrait) {
-		/* Centered Album Deck in Portrait: X: 36..91, Y: 20..75 (W:56, H:56, center 64, 48) */
-		GDS_ClearWindow(display, 36, 20, 91, 75, HIFI_BG);
-		hifi_fill_round_rect(36, 20, 56, 56, HIFI_CARD, HIFI_PILL);
+		/* Full-width Turntable Deck Card in Portrait: X: 4..123, Y: 26..98 (W:120, H:73) */
+		GDS_ClearWindow(display, 0, 26, 127, 98, HIFI_BG);
+		hifi_fill_round_rect(4, 26, 120, 73, HIFI_CARD, HIFI_PILL);
 
 		if (jpeg_data && jpeg_data != default_artwork) {
 			g_has_custom_artwork = true;
 			uint16_t orig_h = display->Height;
-			display->Height = 73;
-			GDS_DrawJPEG(display, (uint8_t*)jpeg_data, 38, 22, GDS_IMAGE_CENTER | GDS_IMAGE_FIT);
+			display->Height = 97;
+			GDS_DrawJPEG(display, (uint8_t*)jpeg_data, 29, 28, GDS_IMAGE_CENTER | GDS_IMAGE_FIT);
 			display->Height = orig_h;
+			GDS_DrawBox(display, 28, 27, 98, 97, HIFI_PILL, false);
 		} else {
 			g_has_custom_artwork = false;
-			hifi_draw_vinyl_disc(64, 48, 0, false);
+			/* Strobe dots on left */
+			for (int s = 0; s < 4; s++) {
+				int sy = 46 + s * 8;
+				GDS_DrawBox(display, 13, sy, 15, sy + 2, HIFI_TRACK, true);
+			}
+			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+			GDS_FontDrawString(display, 9, 80, "33", HIFI_SLATE);
+
+			/* Centered Large Vinyl Disc (Radius 32, cx 64, cy 62) */
+			hifi_draw_vinyl_disc(64, 62, 32, 0, false);
+
+			/* Tonearm on right parked */
+			GDS_DrawBox(display, 111, 34, 115, 38, HIFI_PILL, true);
+			GDS_DrawPixelFast(display, 113, 36, HIFI_WHITE);
+			GDS_DrawVLine(display, 113, 30, 4, HIFI_SLATE);
+			GDS_DrawVLine(display, 113, 36, 24, HIFI_PILL);
+			GDS_DrawBox(display, 112, 60, 114, 63, HIFI_GOLD, true);
+			GDS_DrawHLine(display, 110, 52, 6, HIFI_SLATE);
 		}
 	} else {
 		/* Right Deck Box in Landscape: X: 102..155, Y: 49..107 */
@@ -409,7 +440,7 @@ static void hifi_draw_album_box(const uint8_t *jpeg_data) {
 			GDS_ClearWindow(display, 156, 49, 159, 107, HIFI_BG);
 		} else {
 			g_has_custom_artwork = false;
-			hifi_draw_vinyl_disc(129, 78, 0, false);
+			hifi_draw_vinyl_disc(129, 78, 22, 0, false);
 		}
 	}
 }
@@ -648,54 +679,111 @@ static void displayer_task(void *args) {
 			xSemaphoreGive(displayer.mutex);
 
 			/* Clear background around cards */
-			GDS_ClearWindow(display, 0, 0, 127, 19, HIFI_BG);
-			GDS_ClearWindow(display, 0, 20, 35, 76, HIFI_BG);
-			GDS_ClearWindow(display, 92, 20, 127, 76, HIFI_BG);
-			GDS_ClearWindow(display, 0, 77, 127, 78, HIFI_BG);
-			GDS_ClearWindow(display, 0, 104, 127, 105, HIFI_BG);
-			GDS_ClearWindow(display, 0, 124, 127, 125, HIFI_BG);
-			GDS_ClearWindow(display, 0, 158, 127, 159, HIFI_BG);
+			GDS_ClearWindow(display, 0, 0, 127, 1, HIFI_BG);
+			GDS_ClearWindow(display, 0, 2, 3, 23, HIFI_BG);
+			GDS_ClearWindow(display, 124, 2, 127, 23, HIFI_BG);
+			GDS_ClearWindow(display, 0, 24, 127, 25, HIFI_BG);
+			GDS_ClearWindow(display, 0, 26, 3, 98, HIFI_BG);
+			GDS_ClearWindow(display, 124, 26, 127, 98, HIFI_BG);
+			GDS_ClearWindow(display, 0, 99, 127, 100, HIFI_BG);
+			GDS_ClearWindow(display, 0, 101, 3, 125, HIFI_BG);
+			GDS_ClearWindow(display, 124, 101, 127, 125, HIFI_BG);
+			GDS_ClearWindow(display, 0, 126, 127, 127, HIFI_BG);
+			GDS_ClearWindow(display, 0, 128, 3, 158, HIFI_BG);
+			GDS_ClearWindow(display, 124, 128, 127, 158, HIFI_BG);
+			GDS_ClearWindow(display, 0, 159, 127, 159, HIFI_BG);
 
 			/* -------------------------------------------------------------
-			 * ZONE 1: HEADER PILL (X:4..123, Y:2..17)
+			 * ZONE 1: HEADER & TIMELINE SCRUBBER (X:4..123, Y:2..23)
 			 * ------------------------------------------------------------- */
-			hifi_fill_round_rect(4, 2, 120, 16, HIFI_CARD, HIFI_PILL);
+			hifi_fill_round_rect(4, 2, 120, 22, HIFI_CARD, HIFI_PILL);
+
+			/* Row 1: Status Dot + Source Badge (AIRPLAY) + Time (01:23 / 03:45) */
 			uint16_t dot_col = is_active ? ((anim_tick & 8) ? HIFI_EMERALD : HIFI_CYAN) : HIFI_CYAN;
-			GDS_DrawBox(display, 10, 8, 13, 11, dot_col, true);
+			GDS_DrawBox(display, 8, 8, 11, 11, dot_col, true);
 
 			GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
-			GDS_SetTextWidth(display, 64);
-			GDS_FontDrawString(display, 17, 4, header_buf, HIFI_WHITE);
-			GDS_SetTextWidth(display, 128);
+			GDS_FontDrawString(display, 15, 4, header_buf, HIFI_WHITE);
 
-			if (is_active && (is_playing || cur_elapsed > 0)) {
+			if (is_active && cur_duration > 0 && cur_duration < 3600) {
+				snprintf(time_buf, sizeof(time_buf), "%u:%02u/%u:%02u",
+					(unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60),
+					(unsigned)(cur_duration / 60), (unsigned)(cur_duration % 60));
+			} else if (is_active && cur_elapsed > 0) {
 				snprintf(time_buf, sizeof(time_buf), "%u:%02u", (unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60));
-				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-				int tw = GDS_FontMeasureString(display, time_buf);
-				GDS_FontDrawString(display, max(75, 118 - tw), 4, time_buf, HIFI_CYAN);
 			} else {
-				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-				GDS_FontDrawString(display, 80, 4, "32-BIT", HIFI_GOLD);
+				strcpy(time_buf, "32-BIT");
+			}
+
+			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+			int timew = GDS_FontMeasureString(display, time_buf);
+			uint16_t time_col = (strcmp(time_buf, "32-BIT") == 0) ? HIFI_GOLD : HIFI_CYAN;
+			GDS_FontDrawString(display, max(58, 120 - timew), 4, time_buf, time_col);
+
+			/* Row 2: Scrubber timeline bar at Y: 19..20 (Width 112px, X: 8..119) */
+			GDS_DrawHLine(display, 8, 19, 112, HIFI_TRACK);
+			GDS_DrawHLine(display, 8, 20, 112, HIFI_TRACK);
+			if (is_active && cur_duration > 0) {
+				int fill_w = (int)((cur_elapsed * 112) / cur_duration);
+				if (fill_w > 112) fill_w = 112;
+				if (fill_w > 0) {
+					GDS_DrawHLine(display, 8, 19, fill_w, HIFI_CYAN);
+					GDS_DrawHLine(display, 8, 20, fill_w, HIFI_CYAN);
+				}
+			} else if (is_active && is_playing) {
+				int pulse_x = 8 + ((anim_tick * 4) % 96);
+				GDS_DrawHLine(display, pulse_x, 19, 16, HIFI_CYAN);
+				GDS_DrawHLine(display, pulse_x, 20, 16, HIFI_CYAN);
 			}
 
 			/* -------------------------------------------------------------
-			 * ZONE 2: VINYL RECORD (X:36..91, Y:20..76)
+			 * ZONE 2: TURNTABLE DECK & VINYL RECORD (X:4..123, Y:26..98)
 			 * ------------------------------------------------------------- */
 			uint8_t peak = g_audio_peak_level;
+			bool record_spinning = is_active && (is_playing || peak > 2);
+
 			if (!g_has_custom_artwork) {
-				hifi_draw_vinyl_disc(64, 48, anim_tick, is_active && (is_playing || peak > 2));
+				/* Strobe markings on left */
+				for (int s = 0; s < 4; s++) {
+					int sy = 46 + s * 8;
+					uint16_t sc = (record_spinning && ((anim_tick + s) & 2)) ? HIFI_CYAN : HIFI_TRACK;
+					GDS_DrawBox(display, 13, sy, 15, sy + 2, sc, true);
+				}
+				GDS_SetFont(display, &Font_droid_sans_mono_7x13);
+				GDS_FontDrawString(display, 9, 80, "33", is_active ? HIFI_EMERALD : HIFI_SLATE);
+
+				/* Large Centered Vinyl Disc (Radius 32, cx 64, cy 62) */
+				hifi_draw_vinyl_disc(64, 62, 32, anim_tick, record_spinning);
+
+				/* Tonearm Assembly on right */
+				GDS_DrawBox(display, 111, 34, 115, 38, HIFI_PILL, true);
+				GDS_DrawPixelFast(display, 113, 36, HIFI_WHITE);
+				GDS_DrawVLine(display, 113, 30, 4, HIFI_SLATE); /* Counterweight */
+
+				if (record_spinning) {
+					/* Tonearm playing on record */
+					GDS_DrawLine(display, 113, 36, 105, 48, HIFI_PILL);
+					GDS_DrawLine(display, 105, 48, 93, 56, HIFI_PILL);
+					GDS_DrawLine(display, 93, 56, 86, 62, HIFI_WHITE);
+					GDS_DrawBox(display, 84, 61, 86, 63, HIFI_GOLD, true); /* Cartridge */
+				} else {
+					/* Tonearm parked on rest */
+					GDS_DrawVLine(display, 113, 36, 24, HIFI_PILL);
+					GDS_DrawBox(display, 112, 60, 114, 63, HIFI_GOLD, true);
+					GDS_DrawHLine(display, 110, 52, 6, HIFI_SLATE);
+				}
 			}
 
 			/* -------------------------------------------------------------
-			 * ZONE 3: TRACK MARQUEE / OSD (X:4..123, Y:79..103)
+			 * ZONE 3: TRACK MARQUEE / POPUP OSD (X:4..123, Y:101..125)
 			 * ------------------------------------------------------------- */
 			bool show_osd = (xTaskGetTickCount() < g_osd_expire_tick && g_osd_text[0] != '\0');
 			if (show_osd) {
-				hifi_fill_round_rect(4, 79, 120, 25, HIFI_CARD, g_osd_color);
+				hifi_fill_round_rect(4, 101, 120, 25, HIFI_CARD, g_osd_color);
 				GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
 				int otw = GDS_FontMeasureString(display, g_osd_text);
 				int ox = max(8, 64 - otw / 2);
-				int oy = (strncmp(g_osd_text, "VOL", 3) == 0) ? 81 : 85;
+				int oy = (strncmp(g_osd_text, "VOL", 3) == 0) ? 103 : 107;
 				GDS_FontDrawString(display, ox, oy, g_osd_text, g_osd_color);
 
 				if (strncmp(g_osd_text, "VOL", 3) == 0) {
@@ -703,70 +791,46 @@ static void displayer_task(void *args) {
 					int bar_w = 100;
 					int fill_w = (bar_w * g_system_volume_pct) / 100;
 					if (fill_w > bar_w) fill_w = bar_w;
-					GDS_DrawHLine(display, bar_x, 96, bar_w, HIFI_TRACK);
-					GDS_DrawHLine(display, bar_x, 97, bar_w, HIFI_TRACK);
+					GDS_DrawHLine(display, bar_x, 118, bar_w, HIFI_TRACK);
+					GDS_DrawHLine(display, bar_x, 119, bar_w, HIFI_TRACK);
 					if (fill_w > 0) {
-						GDS_DrawHLine(display, bar_x, 96, fill_w, g_osd_color);
-						GDS_DrawHLine(display, bar_x, 97, fill_w, g_osd_color);
+						GDS_DrawHLine(display, bar_x, 118, fill_w, g_osd_color);
+						GDS_DrawHLine(display, bar_x, 119, fill_w, g_osd_color);
 					}
 				}
 			} else {
-				hifi_fill_round_rect(4, 79, 120, 25, HIFI_CARD, HIFI_PILL);
+				hifi_fill_round_rect(4, 101, 120, 25, HIFI_CARD, HIFI_PILL);
 				GDS_SetFont(display, &Font_droid_sans_fallback_11x13);
 				int text_w = GDS_FontMeasureString(display, track_buf);
 				if (text_w < 112) text_w = 112;
 
 				int text_color = is_active ? HIFI_WHITE : HIFI_CYAN;
 				GDS_SetTextWidth(display, 119);
-				GDS_FontDrawString(display, 8 - marquee_x, 85, track_buf, text_color);
+				GDS_FontDrawString(display, 8 - marquee_x, 107, track_buf, text_color);
 				if (8 + text_w - marquee_x < 119) {
-					GDS_FontDrawString(display, 8 + text_w - marquee_x, 85, track_buf, text_color);
+					GDS_FontDrawString(display, 8 + text_w - marquee_x, 107, track_buf, text_color);
 				}
 				GDS_SetTextWidth(display, 128);
 
 				/* Clip edges */
-				GDS_ClearWindow(display, 0, 79, 3, 103, HIFI_BG);
-				GDS_ClearWindow(display, 124, 79, 127, 103, HIFI_BG);
+				GDS_ClearWindow(display, 0, 101, 3, 125, HIFI_BG);
+				GDS_ClearWindow(display, 124, 101, 127, 125, HIFI_BG);
 				marquee_x = (marquee_x + 2) % text_w;
 			}
 
 			/* -------------------------------------------------------------
-			 * ZONE 4: SCRUBBER TIMELINE (X:4..123, Y:106..123)
+			 * ZONE 4: 14-BAND EQUALIZER SPECTRUM (X:4..123, Y:128..158)
 			 * ------------------------------------------------------------- */
-			hifi_fill_round_rect(4, 106, 120, 18, HIFI_CARD, HIFI_PILL);
-			if (cur_duration > 0 && cur_duration < 3600) {
-				snprintf(time_buf, sizeof(time_buf), "%u:%02u / %u:%02u",
-					(unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60),
-					(unsigned)(cur_duration / 60), (unsigned)(cur_duration % 60));
-			} else {
-				snprintf(time_buf, sizeof(time_buf), "%u:%02u", (unsigned)(cur_elapsed / 60), (unsigned)(cur_elapsed % 60));
-			}
-			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-			int timew = GDS_FontMeasureString(display, time_buf);
-			GDS_FontDrawString(display, max(8, 64 - timew / 2), 108, time_buf, HIFI_CYAN);
-
-			/* Progress bar line at Y: 121 */
-			GDS_DrawHLine(display, 10, 121, 108, HIFI_TRACK);
-			int fill_w = 0;
-			if (is_active && cur_duration > 0) {
-				fill_w = (int)((cur_elapsed * 108) / cur_duration);
-				if (fill_w > 108) fill_w = 108;
-				if (fill_w > 0) GDS_DrawHLine(display, 10, 121, fill_w, HIFI_CYAN);
-			}
-
-			/* -------------------------------------------------------------
-			 * ZONE 5: 14-BAND EQUALIZER SPECTRUM (X:4..123, Y:126..157)
-			 * ------------------------------------------------------------- */
-			hifi_fill_round_rect(4, 126, 120, 31, HIFI_CARD, HIFI_PILL);
+			hifi_fill_round_rect(4, 128, 120, 31, HIFI_CARD, HIFI_PILL);
 
 			/* Micro header */
 			uint16_t ico_col = is_active ? HIFI_EMERALD : HIFI_VIOLET;
-			GDS_DrawVLine(display, 9, 129, 6, ico_col);
-			GDS_DrawVLine(display, 10, 130, 4, ico_col);
-			GDS_DrawVLine(display, 11, 131, 2, ico_col);
+			GDS_DrawVLine(display, 9, 131, 6, ico_col);
+			GDS_DrawVLine(display, 10, 132, 4, ico_col);
+			GDS_DrawVLine(display, 11, 133, 2, ico_col);
 
 			GDS_SetFont(display, &Font_droid_sans_mono_7x13);
-			GDS_FontDrawString(display, 16, 127, is_active ? "44.1kHz PCM" : "DAC READY", HIFI_SLATE);
+			GDS_FontDrawString(display, 16, 129, is_active ? "44.1kHz PCM" : "DAC READY", HIFI_SLATE);
 
 			/* 14 spectrum bars */
 			for (int i = 0; i < 14; i++) {
@@ -800,9 +864,9 @@ static void displayer_task(void *args) {
 					bar_peaks[i]--;
 				}
 
-				int bx = 9 + i * 8; /* 14 bars * 8px = 112px */
+				int bx = 8 + i * 8; /* 14 bars * 8px = 112px */
 				for (int s = 0; s < 7; s++) {
-					int sy = 153 - s * 3;
+					int sy = 155 - s * 3;
 					uint16_t seg_col = HIFI_TRACK;
 					if (s < bar_segs[i]) {
 						if (s < 2) seg_col = HIFI_VIOLET;
@@ -812,8 +876,8 @@ static void displayer_task(void *args) {
 					} else if (s == bar_peaks[i] && s > 0) {
 						seg_col = HIFI_WHITE;
 					}
-					GDS_DrawHLine(display, bx, sy, 5, seg_col);
-					GDS_DrawHLine(display, bx, sy + 1, 5, seg_col);
+					GDS_DrawHLine(display, bx, sy, 6, seg_col);
+					GDS_DrawHLine(display, bx, sy + 1, 6, seg_col);
 				}
 			}
 
@@ -1137,7 +1201,7 @@ static void displayer_task(void *args) {
 			 * ZONE 3 RIGHT: SPINNING VINYL DISC WHEN NO CUSTOM JPEG ARTWORK
 			 * ========================================================================= */
 			if (!g_has_custom_artwork) {
-				hifi_draw_vinyl_disc(129, 78, anim_tick, is_active && (is_playing || peak > 2));
+				hifi_draw_vinyl_disc(129, 78, 22, anim_tick, is_active && (is_playing || peak > 2));
 			}
 
 			/* =========================================================================
